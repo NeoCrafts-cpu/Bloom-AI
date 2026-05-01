@@ -1,0 +1,17 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm install --legacy-peer-deps && npm run build --workspace=apps/web",
+  "outputDirectory": "apps/web/.next",
+  "installCommand": "npm install --legacy-peer-deps",
+  "devCommand": "npm run dev:web",
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "https://bloom-ai-api.up.railway.app/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://bloom-ai-api.up.railway.app/health"
+    }
+  ]
+}
