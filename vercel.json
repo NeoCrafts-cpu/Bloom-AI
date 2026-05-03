@@ -1,6 +1,6 @@
 {
   "buildCommand": "ROOT=$(git rev-parse --show-toplevel) && npm --prefix $ROOT/packages/types run build && npm --prefix $ROOT/apps/web run build",
-  "outputDirectory": "apps/web/.next",
+  "outputDirectory": ".next",
   "installCommand": "npm install --legacy-peer-deps",
   "devCommand": "npm run dev:web",
   "rewrites": [
