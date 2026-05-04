@@ -172,21 +172,37 @@ export default function CopyTradeDashboard() {
   };
 
 
-  // Add ValueChain Testnet to MetaMask
+  // Switch to ValueChain Testnet — tries switch first, falls back to add
   const addValueChainNetwork = async () => {
-    if (!window.ethereum) return;
+    if (!window.ethereum) {
+      alert("MetaMask not detected. Please install MetaMask first.");
+      return;
+    }
+    const eth = window.ethereum as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
     try {
-      await (window.ethereum as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> }).request({
-        method: "wallet_addEthereumChain",
-        params: [{
-          chainId: "0x21D85",
-          chainName: "ValueChain Testnet",
-          nativeCurrency: { name: "VALUE", symbol: "VALUE", decimals: 18 },
-          rpcUrls: ["https://testnet-rpc.sodex.dev"],
-          blockExplorerUrls: ["https://testnet-explorer.sodex.dev"],
-        }],
+      // Try switching first (works if already added)
+      await eth.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x21D85" }],
       });
-    } catch { /* user rejected */ }
+    } catch (switchErr: unknown) {
+      // Error code 4902 = chain not added yet
+      if ((switchErr as { code?: number })?.code === 4902) {
+        try {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: "0x21D85",
+              chainName: "ValueChain Testnet",
+              nativeCurrency: { name: "VBC", symbol: "VBC", decimals: 18 },
+              rpcUrls: ["https://testnet-rpc.sodex.dev"],
+              blockExplorerUrls: ["https://explorer-testnet.sosovalue.com"],
+            }],
+          });
+        } catch { /* user rejected add */ }
+      }
+      // else: user rejected switch — do nothing
+    }
   };
   const reset = () => {
     setStep(isConnected ? "configure" : "connect");
@@ -224,14 +240,14 @@ export default function CopyTradeDashboard() {
                   className="orange-btn-outline flex items-center gap-2 text-sm"
                 >
                   <ExternalLink size={14} />
-                  Add ValueChain Network
+                  Switch to ValueChain Testnet
                 </button>
               </div>
               <p className="text-xs text-bloom-text-muted">
                 No wallet?{" "}
                 <a href="https://metamask.io" target="_blank" rel="noopener noreferrer"
                   className="text-bloom-orange hover:underline">Download MetaMask</a>
-                {" "}then click &quot;Add ValueChain Network&quot; to add the testnet (Chain ID: {valueChainTestnet.id}).
+                {" "}then click &quot;Switch to ValueChain Testnet&quot; to add the network (Chain ID: 138565).
               </p>
             </div>
           ) : (
