@@ -20,6 +20,7 @@ import LandingNavbar from "@/components/LandingNavbar";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import VideoBackgroundClient from "@/components/VideoBackgroundClient";
 import { RevealStagger, RevealItem } from "@/components/Reveal";
+import WelcomeModal from "@/components/WelcomeModal";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -31,6 +32,7 @@ export default function HomePage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden">
+      <WelcomeModal />
       <VideoBackgroundClient />
 
       {/* Gradient overlay */}
@@ -58,32 +60,29 @@ export default function HomePage() {
             className="pill-badge-orange mb-8"
           >
             <span className="live-dot" />
-            BEST AI FINANCE 2026
+            LIVE ON SODEX TESTNET
           </motion.div>
 
           <motion.h1
             initial={{ opacity: 0, y: 32 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, delay: 0.25, ease }}
-            className="text-5xl md:text-7xl font-bold leading-tight tracking-tight mb-6 max-w-5xl"
+            className="text-6xl md:text-8xl font-bold leading-tight tracking-tight mb-6"
           >
-            <span className="text-bloom-text">Redefining the Future of </span>
+            <span className="text-bloom-text">Trade Smarter.</span>
             <br />
-            <span className="orange-gradient-text">Crypto</span>
-            <span className="text-bloom-text"> and </span>
-            <span className="orange-gradient-text">Fintech</span>
-            <span className="text-bloom-text"> Products</span>
+            <span className="orange-gradient-text">Bloom</span>
+            <span className="text-bloom-text/40"> the Market.</span>
           </motion.h1>
 
           <motion.p
             initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.65, delay: 0.4, ease }}
-            className="text-bloom-text-muted text-lg md:text-xl max-w-2xl mb-10 leading-relaxed"
+            className="text-bloom-text-muted text-lg md:text-xl max-w-xl mb-10 leading-relaxed"
           >
-            Bloom AI is an agentic financial media and execution network. From
-            macro intelligence to on-chain execution — all automated, all
-            transparent, all yours.
+            AI-powered copy trading from macro signals to on-chain execution.
+            Automated, transparent, and entirely yours.
           </motion.p>
 
           <motion.div
