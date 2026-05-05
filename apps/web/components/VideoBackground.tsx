@@ -23,7 +23,8 @@ export default function VideoBackground() {
     >
       <video
         ref={videoRef}
-        src="/video background.mp4"
+        src="/bg.mp4"
+        poster="/poster.jpg"
         autoPlay
         loop
         muted
