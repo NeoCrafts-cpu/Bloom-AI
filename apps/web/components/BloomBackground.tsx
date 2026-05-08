@@ -36,15 +36,15 @@ const FLOWERS = [
 export default function BloomBackground() {
   return (
     <>
-      {FLOWERS.map((pos, i) => (
+      {FLOWERS.map(({ w, opacity, ...pos }, i) => (
         <div
           key={i}
           className="pointer-events-none select-none fixed"
           style={{
             zIndex: 0,
-            opacity: pos.opacity,
-            width: pos.w,
-            height: pos.w,
+            opacity,
+            width: w,
+            height: w,
             ...pos,
           }}
           aria-hidden="true"
