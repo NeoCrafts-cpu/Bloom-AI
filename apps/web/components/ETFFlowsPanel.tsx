@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity } from "lucide-react";
 import type { ETFFlowData } from "@bloom-ai/types";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API = "/api";
 
 export default function ETFFlowsPanel() {
   const [flows, setFlows]       = useState<ETFFlowData[]>([]);

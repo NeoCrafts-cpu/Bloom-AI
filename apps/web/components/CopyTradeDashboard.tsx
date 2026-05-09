@@ -23,7 +23,7 @@ const AUTHORIZATION_TYPES = {
   ],
 } as const;
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API = "/api";
 
 export default function CopyTradeDashboard() {
   const searchParams = useSearchParams();
@@ -81,6 +81,16 @@ export default function CopyTradeDashboard() {
     if (!address) return;
     setIsLoading(true);
     setStep("signing");
+
+    // Ensure MetaMask is on the right chain before signing
+    try {
+      await addValueChainNetwork();
+    } catch {
+      // continue — wallet may already be on correct chain
+    }
+
+    // Small delay to let chain switch settle
+    await new Promise((r) => setTimeout(r, 500));
 
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
 
