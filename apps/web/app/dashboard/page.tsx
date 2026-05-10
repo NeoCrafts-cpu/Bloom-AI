@@ -14,7 +14,7 @@ import ETFFlowsPanel from "@/components/ETFFlowsPanel";
 import type { MarketSnapshot, ETFFlowData, SmartMoneyNewsletter } from "@bloom-ai/types";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
-const API = "/api";
+const API = "";
 
 const MOCK_PRICES: MarketSnapshot[] = [
   { symbol: "BTC", price: 97420, change24h: 3.2, volume24h: 38_400_000_000, marketCap: 1_920_000_000_000, updatedAt: new Date().toISOString() },

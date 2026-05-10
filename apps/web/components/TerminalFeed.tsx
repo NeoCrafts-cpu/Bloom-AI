@@ -84,9 +84,7 @@ export default function TerminalFeed() {
   useEffect(() => {
     const fetchNewsletters = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/newsletters?limit=20`
-        );
+        const res = await fetch("/api/newsletters?limit=20");
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
@@ -100,7 +98,10 @@ export default function TerminalFeed() {
     fetchNewsletters();
 
     // SSE for real-time newsletter updates
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+    const apiUrl =
+      typeof window !== "undefined" && window.location.hostname !== "localhost"
+        ? "https://bloom-ai-mqrb.onrender.com"
+        : "http://localhost:4000";
     let evtSource: EventSource | null = null;
     try {
       evtSource = new EventSource(`${apiUrl}/api/newsletters/stream`);

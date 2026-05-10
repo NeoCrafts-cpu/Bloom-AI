@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, RefreshCw, BarChart3, Activity } from "lucide-react";
 import type { ETFFlowData } from "@bloom-ai/types";
 
-const API = "/api";
+const API = "";
 
 export default function ETFFlowsPanel() {
   const [flows, setFlows]       = useState<ETFFlowData[]>([]);
