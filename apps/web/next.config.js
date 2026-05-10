@@ -9,6 +9,13 @@ const nextConfig = {
       { protocol: "https", hostname: "assets.coingecko.com" },
     ],
   },
+  async rewrites() {
+    const API_BASE = "https://bloom-ai-mqrb.onrender.com";
+    return [
+      { source: "/api/:path*", destination: `${API_BASE}/api/:path*` },
+      { source: "/health",     destination: `${API_BASE}/health` },
+    ];
+  },
   webpack(config) {
     // @metamask/sdk (pulled in transitively by wagmi/connectors) tries to
     // import React Native packages that don't exist in a web environment.

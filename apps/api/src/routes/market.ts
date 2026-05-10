@@ -24,9 +24,14 @@ export async function marketRouter(app: FastifyInstance) {
   });
 
   // ── Prices (SoDEX → CoinGecko fallback) ───────────────────────────────────
-  app.get("/prices", async () => {
-    const result = await getMarketSnapshots();
-    return { data: result.data, meta: { cachedAt: result.cachedAt, isStale: result.isStale } };
+  app.get("/prices", async (req, reply) => {
+    try {
+      const result = await getMarketSnapshots();
+      return { data: result.data, meta: { cachedAt: result.cachedAt, isStale: result.isStale } };
+    } catch {
+      reply.code(503);
+      return { data: [], error: "Price data temporarily unavailable", meta: { cachedAt: null, isStale: false } };
+    }
   });
 
   // ── ETF Flows ──────────────────────────────────────────────────────────────
