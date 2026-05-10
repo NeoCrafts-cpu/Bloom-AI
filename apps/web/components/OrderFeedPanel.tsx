@@ -23,7 +23,7 @@ export default function OrderFeedPanel() {
 
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${wsBase}/ws/orders`);
+      ws = new WebSocket(`${wsBase}/ws`);
       ws.onmessage = (event) => {
         try {
           const fill: OrderFill = JSON.parse(event.data);
