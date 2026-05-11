@@ -250,21 +250,150 @@ export async function getLatestCryptoNews(): Promise<{ title: string; url: strin
 
 // ─── DeFiLlama TVL ───────────────────────────────────────────────────────────
 
-async function fetchDefiLlamaTVL(): Promise<{ name: string; tvl: number; change24h: number }[]> {
+async function fetchDefiLlamaTVL(): Promise<{ name: string; tvl: number; change24h: number; logo?: string; category?: string }[]> {
   const res = await fetch("https://api.llama.fi/protocols", { signal: AbortSignal.timeout(10000) });
   if (!res.ok) throw new Error(`DeFiLlama ${res.status}`);
-  const data = (await res.json()) as { name: string; tvl: number; change_1d: number }[];
+  const data = (await res.json()) as { name: string; tvl: number; change_1d: number; logo?: string; category?: string }[];
   return data
+    .filter((p) => p.tvl > 0)
     .sort((a, b) => b.tvl - a.tvl)
-    .slice(0, 10)
-    .map((p) => ({ name: p.name, tvl: p.tvl, change24h: p.change_1d ?? 0 }));
+    .slice(0, 20)
+    .map((p) => ({ name: p.name, tvl: p.tvl, change24h: p.change_1d ?? 0, logo: p.logo, category: p.category }));
 }
 
-export async function getDefiLlamaTVL(): Promise<{ name: string; tvl: number; change24h: number }[]> {
+export async function getDefiLlamaTVL(): Promise<{ name: string; tvl: number; change24h: number; logo?: string; category?: string }[]> {
   try {
     const result = await cache.get("defi-tvl", TTL.DEFI_TVL, fetchDefiLlamaTVL);
     return result.data;
   } catch {
     return [];
   }
+}
+
+// ─── ETF Summary History ──────────────────────────────────────────────────────
+
+export interface ETFHistoryDay {
+  date: string;
+  total_net_inflow: number;
+  total_value_traded: number;
+  total_net_assets: number;
+  cum_net_inflow: number;
+}
+
+async function fetchETFSummaryHistory(symbol: string, limit: number): Promise<ETFHistoryDay[]> {
+  if (!config.SOSOVALUE_API_KEY) throw new Error("SOSOVALUE_API_KEY not configured");
+  const data = await get<ETFHistoryDay[]>("/etfs/summary-history", {
+    symbol,
+    page_size: String(limit),
+  });
+  return Array.isArray(data) ? data : [];
+}
+
+export async function getETFSummaryHistory(
+  symbol = "BTC",
+  limit = 30,
+): Promise<{ data: ETFHistoryDay[]; cachedAt: number; isStale: boolean }> {
+  return cache.get(`etf-history-${symbol}-${limit}`, TTL.ETF_HISTORY, () =>
+    fetchETFSummaryHistory(symbol, limit),
+  );
+}
+
+// ─── Currency List (heatmap / ID lookup) ─────────────────────────────────────
+
+export interface SoSoCurrency {
+  currency_id: string;
+  symbol: string;
+  name: string;
+}
+
+async function fetchCurrencyList(): Promise<SoSoCurrency[]> {
+  if (!config.SOSOVALUE_API_KEY) return [];
+  const data = await get<{ list: SoSoCurrency[] }>("/currencies", { page_size: "100", page: "1" });
+  return data?.list ?? [];
+}
+
+export async function getCurrencyList(): Promise<{ data: SoSoCurrency[]; cachedAt: number; isStale: boolean }> {
+  return cache.get("currency-list", TTL.CURRENCY_LIST, fetchCurrencyList);
+}
+
+export async function getCurrencyIdBySymbol(symbol: string): Promise<string | null> {
+  try {
+    const result = await getCurrencyList();
+    const found = result.data.find((c) => c.symbol.toUpperCase() === symbol.toUpperCase());
+    return found?.currency_id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Currency Market Snapshot (heatmap per-coin data) ────────────────────────
+
+export interface CurrencyMarketSnapshotData {
+  price: number;
+  change_pct_24h: number;
+  marketcap: number;
+  turnover_24h: number;
+  marketcap_rank: number;
+  fdv: number;
+  circulating_supply: string;
+}
+
+export async function getCurrencySnapshot(
+  currencyId: string,
+): Promise<CurrencyMarketSnapshotData | null> {
+  try {
+    const result = await cache.get(
+      `snapshot-${currencyId}`,
+      TTL.MARKET_PRICES,
+      () => get<CurrencyMarketSnapshotData>(`/currencies/${currencyId}/market-snapshot`),
+    );
+    return result.data;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Fundraising ──────────────────────────────────────────────────────────────
+
+export interface FundraisingInvestor {
+  investor_id: string;
+  name: string;
+  logo_url: string;
+  type: number;
+  is_lead_investor: boolean;
+}
+
+export interface FundraisingRound {
+  round_id: string;
+  round: string;
+  amount: string;
+  valuation: string | null;
+  date: number;
+  investors: FundraisingInvestor[];
+}
+
+export interface FundraisingData {
+  project_id: string;
+  fundraising_rounds: FundraisingRound[];
+  investors: { name: string; logo_url: string; type: number }[];
+  investment_stats: {
+    total_rounds: number;
+    rounds_last_year: number;
+    lead_invest_count: number;
+    last_invest_date: number | null;
+    portfolio_count: number;
+  };
+}
+
+async function fetchCurrencyFundraising(currencyId: string): Promise<FundraisingData | null> {
+  if (!config.SOSOVALUE_API_KEY) return null;
+  return get<FundraisingData>(`/currencies/${currencyId}/fundraising`);
+}
+
+export async function getCurrencyFundraising(
+  currencyId: string,
+): Promise<{ data: FundraisingData | null; cachedAt: number; isStale: boolean }> {
+  return cache.get(`fundraising-${currencyId}`, TTL.FUNDRAISING, () =>
+    fetchCurrencyFundraising(currencyId),
+  );
 }

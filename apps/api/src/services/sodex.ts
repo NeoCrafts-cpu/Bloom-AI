@@ -297,3 +297,130 @@ export async function cancelOrder(
     { accountID, symbolID, orders: [{ clOrdID }] },
   );
 }
+
+// ─── Perps Market Data ────────────────────────────────────────────────────────
+
+export interface PerpsMarkPrice {
+  symbol: string;
+  markPrice: string;
+  indexPrice: string;
+  fundingRate: string;
+  nextFundingTime: number;
+}
+
+export async function getPerpsMarkPrices(): Promise<PerpsMarkPrice[]> {
+  try {
+    const result = await cache.get("perps-mark-prices", TTL.MARK_PRICES, () =>
+      publicGet<PerpsMarkPrice[]>(`${PERPS}/markets/mark-prices`),
+    );
+    return result.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export interface PerpsSymbolInfo {
+  symbol: string;
+  symbolID: number;
+  baseAsset: string;
+  quoteAsset: string;
+  maxLeverage: number;
+  pricePrecision: number;
+  quantityPrecision: number;
+}
+
+export async function getPerpsSymbols(): Promise<PerpsSymbolInfo[]> {
+  try {
+    const result = await cache.get("perps-symbols", TTL.SODEX_SYMBOLS, () =>
+      publicGet<PerpsSymbolInfo[]>(`${PERPS}/markets/symbols`),
+    );
+    return result.data ?? [];
+  } catch {
+    return [];
+  }
+}
+
+// ─── Perps Account ────────────────────────────────────────────────────────────
+
+export interface PerpsPosition {
+  symbol: string;
+  positionSide: number; // 1=long, 2=short
+  quantity: string;
+  entryPrice: string;
+  markPrice: string;
+  unrealizedPnl: string;
+  leverage: number;
+  marginMode: string;
+  liquidationPrice: string;
+}
+
+export interface PerpsBalance {
+  asset: string;
+  available: string;
+  locked: string;
+  total: string;
+  unrealizedPnl: string;
+  marginBalance: string;
+}
+
+export interface PerpsAccountState {
+  accountID: number;
+  balances: PerpsBalance[];
+  positions: PerpsPosition[];
+  openOrdersCount: number;
+}
+
+export async function getPerpsAccountState(userAddress: string): Promise<PerpsAccountState | null> {
+  try {
+    const result = await cache.get(
+      `sodex-perps-account-${userAddress}`,
+      TTL.PERPS_ACCOUNT,
+      async () => {
+        const data = await publicGet<{
+          accountID: number;
+          balances: PerpsBalance[];
+          positions: PerpsPosition[];
+          openOrders: unknown[];
+        }>(`${PERPS}/accounts/${userAddress}/state`);
+        return {
+          accountID: data.accountID,
+          balances: data.balances ?? [],
+          positions: data.positions ?? [],
+          openOrdersCount: (data.openOrders ?? []).length,
+        } as PerpsAccountState;
+      },
+    );
+    return result.data;
+  } catch (err) {
+    console.warn(`[SoDEX] getPerpsAccountState failed for ${userAddress}:`, err);
+    return null;
+  }
+}
+
+export async function getPerpsKlines(
+  symbol: string,
+  interval = "1h",
+  limit = 100,
+): Promise<{ time: number; open: number; high: number; low: number; close: number; volume: number }[]> {
+  try {
+    const res = await fetch(
+      `${PERPS}/markets/${symbol}/klines?interval=${interval}&limit=${limit}`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) return [];
+    const json = (await res.json()) as {
+      code: number;
+      data: [number, string, string, string, string, string][];
+    };
+    return (json.data ?? []).map(([t, o, h, l, c, v]) => ({
+      time: t,
+      open: parseFloat(o),
+      high: parseFloat(h),
+      low: parseFloat(l),
+      close: parseFloat(c),
+      volume: parseFloat(v),
+    }));
+  } catch {
+    return [];
+  }
+}
