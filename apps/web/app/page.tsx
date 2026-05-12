@@ -9,10 +9,13 @@ import {
   ChevronRight, Activity, Globe, Lock, LineChart, BarChart3,
   BookOpen, Newspaper, Copy, Search,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import LandingNavbar from "@/components/LandingNavbar";
 import AnimatedCounter from "@/components/AnimatedCounter";
 import { RevealStagger, RevealItem } from "@/components/Reveal";
 import WelcomeModal from "@/components/WelcomeModal";
+
+const BloomVisualization = dynamic(() => import("@/components/BloomVisualization"), { ssr: false });
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -68,84 +71,96 @@ export default function HomePage() {
         {/* ── HERO ── */}
         <section
           ref={heroRef}
-          className="flex flex-col items-center justify-center text-center min-h-screen px-4 pt-20 pb-8"
+          className="min-h-screen flex flex-col lg:flex-row items-center justify-center gap-8 px-6 pt-24 pb-12 max-w-7xl mx-auto"
         >
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.55, delay: 0.1, ease }}
-            className="pill-badge-orange mb-8"
-          >
-            <span className="live-dot" />
-            LIVE ON SODEX TESTNET · BUILT FOR SOSOVALUE BUILDATHON 2026
-          </motion.div>
+          {/* ─ Left: text ─ */}
+          <div className="flex-1 flex flex-col items-center lg:items-start text-center lg:text-left">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.55, delay: 0.1, ease }}
+              className="pill-badge-orange mb-7"
+            >
+              <span className="live-dot" />
+              LIVE ON SODEX TESTNET · SOSOVALUE BUILDATHON 2026
+            </motion.div>
 
-          <motion.h1
-            initial={{ opacity: 0, y: 32 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.25, ease }}
-            className="text-5xl md:text-7xl lg:text-8xl font-bold leading-[1.05] tracking-tight mb-6 max-w-4xl"
-          >
-            <span className="text-bloom-text">The Agentic</span>
-            <br />
-            <span className="orange-gradient-text">Finance OS</span>
-          </motion.h1>
+            <motion.h1
+              initial={{ opacity: 0, y: 32 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.65, delay: 0.25, ease }}
+              className="text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight mb-6"
+            >
+              <span className="text-bloom-text">The Agentic</span>
+              <br />
+              <span className="orange-gradient-text">Finance OS</span>
+            </motion.h1>
 
-          <motion.p
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.65, delay: 0.4, ease }}
-            className="text-bloom-text-muted text-lg md:text-xl max-w-2xl mb-10 leading-relaxed"
-          >
-            Five AI agents — Journalist, Strategist, Broker, Sentinel, and Chart Analyst —
-            transforming SoSoValue market intelligence into signed, on-chain trades on SoDEX.
-          </motion.p>
+            <motion.p
+              initial={{ opacity: 0, y: 24 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.65, delay: 0.4, ease }}
+              className="text-bloom-text-muted text-lg md:text-xl max-w-lg mb-10 leading-relaxed"
+            >
+              Five AI agents — Journalist, Strategist, Broker, Sentinel, and Chart Analyst —
+              transforming SoSoValue market intelligence into signed, on-chain trades on SoDEX.
+            </motion.p>
 
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, delay: 0.52, ease }}
-            className="flex flex-col sm:flex-row items-center gap-4 mb-16"
-          >
-            <Link href="/research" className="orange-btn flex items-center gap-2 text-base px-8 py-3">
-              <LineChart size={18} />
-              Open Research
-            </Link>
-            <Link href="/terminal" className="orange-btn-outline flex items-center gap-2 text-base px-8 py-3">
-              Launch Terminal
-              <ArrowUpRight size={18} />
-            </Link>
-          </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.55, delay: 0.52, ease }}
+              className="flex flex-col sm:flex-row items-center lg:items-start gap-4 mb-12"
+            >
+              <Link href="/research" className="orange-btn flex items-center gap-2 text-base px-8 py-3">
+                <LineChart size={18} />
+                Open Research
+              </Link>
+              <Link href="/terminal" className="orange-btn-outline flex items-center gap-2 text-base px-8 py-3">
+                Launch Terminal
+                <ArrowUpRight size={18} />
+              </Link>
+            </motion.div>
 
-          {/* Agent pipeline cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 32 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.65, ease }}
-            className="w-full max-w-5xl"
-          >
-            <div className="flex items-center justify-center gap-2 md:gap-3 flex-wrap px-2">
+            {/* Agent pipeline chips */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.6, delay: 0.65, ease }}
+              className="flex items-center gap-2 flex-wrap"
+            >
               {PIPELINE.map((step, i) => (
-                <div key={i} className="flex items-center gap-2 md:gap-3">
+                <div key={i} className="flex items-center gap-1.5">
                   <motion.div
-                    whileHover={{ y: -4, boxShadow: "0 0 32px rgba(232,97,10,0.22)" }}
+                    whileHover={{ y: -3, boxShadow: "0 0 24px rgba(232,97,10,0.2)" }}
                     transition={{ duration: 0.2 }}
-                    className="glass-card px-4 py-3 flex items-center gap-2.5 shrink-0"
+                    className="glass-card px-3 py-2 flex items-center gap-2 shrink-0"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
-                      <step.icon size={13} className="text-bloom-orange" />
+                    <div className="w-6 h-6 rounded-md bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
+                      <step.icon size={11} className="text-bloom-orange" />
                     </div>
-                    <div className="text-left">
-                      <p className="text-xs font-semibold text-bloom-text leading-none">{step.name}</p>
-                      <p className="text-[10px] text-bloom-text-muted mt-0.5">{step.role}</p>
-                    </div>
+                    <p className="text-[11px] font-semibold text-bloom-text">{step.name}</p>
                   </motion.div>
                   {i < PIPELINE.length - 1 && (
-                    <ChevronRight size={14} className="text-bloom-orange opacity-50 shrink-0 hidden md:block" />
+                    <ChevronRight size={12} className="text-bloom-orange opacity-40 shrink-0 hidden sm:block" />
                   )}
                 </div>
               ))}
+            </motion.div>
+          </div>
+
+          {/* ─ Right: Bloom visualization ─ */}
+          <motion.div
+            initial={{ opacity: 0, scale: 0.92 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.9, delay: 0.35, ease }}
+            className="flex-1 w-full max-w-[520px] lg:max-w-none aspect-square lg:aspect-auto lg:h-[580px] relative"
+          >
+            {/* subtle label */}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+              <span className="text-[10px] font-mono text-bloom-text-muted opacity-50 tracking-widest uppercase">Bloom · 5 Agents</span>
             </div>
+            <BloomVisualization />
           </motion.div>
         </section>
 
