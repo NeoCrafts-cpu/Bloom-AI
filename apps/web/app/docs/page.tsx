@@ -524,7 +524,7 @@ function SectionMarket() {
               </div>
               <div>
                 <h3 className="text-sm font-bold text-bloom-text">{p.title}</h3>
-                <Badge variant="outline">{p.lib}</Badge>
+                <Badge color="muted">{p.lib}</Badge>
               </div>
             </div>
             <DocP>{p.desc}</DocP>
