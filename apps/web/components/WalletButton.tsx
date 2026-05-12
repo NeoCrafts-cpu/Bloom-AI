@@ -149,13 +149,6 @@ export default function WalletButton() {
 }
 
 
-export default function WalletButton() {
-  const { address, isConnected, chain } = useAccount();
-  const { connect, isPending } = useConnect();
-  const { disconnect } = useDisconnect();
-  const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   // Close dropdown on outside click
   useEffect(() => {

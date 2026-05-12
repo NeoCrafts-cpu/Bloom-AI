@@ -16,6 +16,7 @@ import { RevealStagger, RevealItem } from "@/components/Reveal";
 import WelcomeModal from "@/components/WelcomeModal";
 
 const BloomVisualization = dynamic(() => import("@/components/BloomVisualization"), { ssr: false });
+const PixelBackground    = dynamic(() => import("@/components/PixelBackground"),    { ssr: false });
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -27,16 +28,8 @@ export default function HomePage() {
       <WelcomeModal />
 
       {/* ── Animated background ── */}
-      <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 0 }}>
-        {/* Dot grid */}
-        <div
-          className="absolute inset-0 opacity-40"
-          style={{
-            backgroundImage:
-              "radial-gradient(circle, rgba(232,97,10,0.12) 1px, transparent 1px)",
-            backgroundSize: "36px 36px",
-          }}
-        />
+      <PixelBackground />
+      <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 1 }}>
         {/* Orb 1 — top-left */}
         <motion.div
           animate={{ scale: [1, 1.15, 1], opacity: [0.07, 0.12, 0.07] }}
