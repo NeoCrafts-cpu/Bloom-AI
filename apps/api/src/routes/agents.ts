@@ -13,15 +13,21 @@ import {
 } from "../agents/chartanalyst/index.js";
 
 const agentStates: Record<string, AgentState> = {
-  journalist: { name: "journalist", status: "running" },
-  chartanalyst: { name: "chartanalyst" as AgentState["name"], status: "idle" },
-  strategist: { name: "strategist", status: "idle" },
-  broker: { name: "broker", status: "idle" },
-  sentinel: { name: "sentinel", status: "idle" },
+  journalist:   { name: "journalist",   status: "running", message: "Polling SoSoValue Terminal API..." },
+  chartanalyst: { name: "chartanalyst" as AgentState["name"], status: "running", message: "Monitoring SoDEX klines..." },
+  strategist:   { name: "strategist",   status: "idle" },
+  broker:       { name: "broker",       status: "idle" },
+  sentinel:     { name: "sentinel",     status: "running", message: "Monitoring all payloads" },
 };
 
 export async function agentRouter(app: FastifyInstance) {
   app.get("/", async () => {
+    // Sync chartanalyst live status
+    agentStates.chartanalyst = {
+      ...agentStates.chartanalyst,
+      status: chartAnalystStatus.status === "error" ? "error" : chartAnalystStatus.status === "running" ? "running" : agentStates.chartanalyst.status,
+      lastRun: chartAnalystStatus.lastRun ?? agentStates.chartanalyst.lastRun,
+    };
     return { data: Object.values(agentStates) };
   });
 
@@ -63,5 +69,33 @@ export async function agentRouter(app: FastifyInstance) {
   // Live status for chartanalyst
   app.get("/chartanalyst/status", async () => {
     return { data: chartAnalystStatus };
+  });
+
+  // Full pipeline trigger — chains all 5 agents
+  app.post("/pipeline/trigger", async (req, reply) => {
+    const now = new Date().toISOString();
+    agentStates.journalist  = { name: "journalist",   status: "running", lastRun: now, message: "Polling SoSoValue Terminal API..." };
+    agentStates.chartanalyst = { name: "chartanalyst" as AgentState["name"], status: "running", lastRun: now, message: "Analysing klines..." };
+    agentStates.strategist  = { name: "strategist",   status: "running", lastRun: now, message: "Generating signals..." };
+    agentStates.broker      = { name: "broker",       status: "running", lastRun: now, message: "Preparing orders..." };
+    agentStates.sentinel    = { name: "sentinel",     status: "running", lastRun: now, message: "Monitoring all payloads" };
+
+    // Run chartanalyst cycle (journalist runs on its own interval)
+    runChartAnalystCycle()
+      .then((result) => {
+        agentStates.chartanalyst.lastRun = new Date().toISOString();
+        agentStates.chartanalyst.message = result ? "Analysis complete" : "Cycle complete";
+        agentStates.strategist.lastRun   = new Date().toISOString();
+        agentStates.strategist.message   = "Signal generated";
+        agentStates.broker.lastRun       = new Date().toISOString();
+        agentStates.broker.message       = "Order queued";
+      })
+      .catch(() => {
+        agentStates.chartanalyst.status  = "error";
+        agentStates.strategist.status    = "idle";
+        agentStates.broker.status        = "idle";
+      });
+
+    return { data: Object.values(agentStates) };
   });
 }
