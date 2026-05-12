@@ -141,12 +141,29 @@ export async function getSymbolIdMap(): Promise<Record<string, number>> {
   return map;
 }
 
+/** Static map of known SoDEX Testnet spot symbols (used as primary lookup) */
+const STATIC_SYMBOL_MAP: Record<string, string> = {
+  BTC:  "vBTC_vUSDC",
+  ETH:  "vETH_vUSDC",
+  SOL:  "vSOL_vUSDC",
+  BNB:  "vBNB_vUSDC",
+  AVAX: "vAVAX_vUSDC",
+  ARB:  "vARB_vUSDC",
+  OP:   "vOP_vUSDC",
+};
+
 /** Get the SoDEX spot symbol name for a base asset (e.g. "BTC" → "vBTC_vUSDC") */
 export async function getSymbolName(baseAsset: string): Promise<string | null> {
+  const upper = baseAsset.toUpperCase();
+
+  // 1. Fast static lookup — always works even if SoDEX symbols endpoint is slow/unavailable
+  if (STATIC_SYMBOL_MAP[upper]) return STATIC_SYMBOL_MAP[upper];
+
+  // 2. Dynamic lookup from the live symbols endpoint
   const symbols = await getSymbols();
   const found = symbols.find(
     (s) =>
-      (s.baseAsset === `v${baseAsset}` || s.baseAsset === baseAsset) &&
+      (s.baseAsset === `v${upper}` || s.baseAsset === upper) &&
       (s.quoteAsset === "vUSDC" || s.quoteAsset === "USDC"),
   );
   return found?.symbol ?? null;

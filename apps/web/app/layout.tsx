@@ -1,9 +1,12 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
 import PageTransition from "@/components/PageTransition";
 import CursorGlow from "@/components/CursorGlow";
 import ScrollProgressBar from "@/components/ScrollProgressBar";
+import { cookieToInitialState } from "wagmi";
+import { wagmiConfig } from "@/lib/wagmi";
 
 export const metadata: Metadata = {
   title: "Bloom AI — Agentic Finance, Fully On-Chain",
@@ -16,11 +19,13 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const cookie = (await headers()).get("cookie");
+  const initialState = cookieToInitialState(wagmiConfig, cookie);
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
@@ -36,7 +41,7 @@ export default function RootLayout({
       <body className="min-h-screen bg-bloom-bg text-bloom-text antialiased">
         <ScrollProgressBar />
         <CursorGlow />
-        <Providers>
+        <Providers initialState={initialState}>
           <PageTransition>{children}</PageTransition>
         </Providers>
       </body>
