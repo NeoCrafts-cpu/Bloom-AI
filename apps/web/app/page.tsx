@@ -32,21 +32,21 @@ export default function HomePage() {
       <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 1 }}>
         {/* Orb 1 — top-left */}
         <motion.div
-          animate={{ scale: [1, 1.15, 1], opacity: [0.07, 0.12, 0.07] }}
+          animate={{ scale: [1, 1.15, 1], opacity: [0.10, 0.18, 0.10] }}
           transition={{ duration: 8, repeat: Infinity, ease: "easeInOut" }}
           className="absolute -top-32 -left-32 w-[700px] h-[700px] rounded-full"
           style={{ background: "radial-gradient(circle, #E8610A 0%, transparent 70%)" }}
         />
         {/* Orb 2 — bottom-right */}
         <motion.div
-          animate={{ scale: [1, 1.2, 1], opacity: [0.05, 0.09, 0.05] }}
+          animate={{ scale: [1, 1.2, 1], opacity: [0.08, 0.14, 0.08] }}
           transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 2 }}
           className="absolute bottom-0 right-0 w-[600px] h-[600px] rounded-full"
           style={{ background: "radial-gradient(circle, #F5A020 0%, transparent 70%)" }}
         />
         {/* Orb 3 — center */}
         <motion.div
-          animate={{ scale: [1, 1.1, 1], opacity: [0.03, 0.06, 0.03] }}
+          animate={{ scale: [1, 1.1, 1], opacity: [0.05, 0.09, 0.05] }}
           transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 5 }}
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[900px] h-[900px] rounded-full"
           style={{ background: "radial-gradient(circle, #E8610A 0%, transparent 65%)" }}
@@ -54,7 +54,7 @@ export default function HomePage() {
         {/* Bottom fade */}
         <div
           className="absolute bottom-0 left-0 right-0 h-64"
-          style={{ background: "linear-gradient(to top, #0A0703 0%, transparent 100%)" }}
+          style={{ background: "linear-gradient(to top, #0A0502 0%, transparent 100%)" }}
         />
       </div>
 

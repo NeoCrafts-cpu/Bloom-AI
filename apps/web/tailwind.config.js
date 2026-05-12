@@ -9,8 +9,8 @@ module.exports = {
     extend: {
       colors: {
         bloom: {
-          bg: "#0A0703",
-          "bg-2": "#120D06",
+          bg: "#0E0804",
+          "bg-2": "#1A0C05",
           "bg-card": "rgba(255,255,255,0.04)",
           orange: "#E8610A",
           "orange-light": "#F5A020",
@@ -30,7 +30,7 @@ module.exports = {
         "gradient-orange":
           "linear-gradient(135deg, #E8610A 0%, #F5A020 100%)",
         "gradient-bloom":
-          "linear-gradient(180deg, #0A0703 0%, #1A0A03 50%, #0A0703 100%)",
+          "linear-gradient(180deg, #0E0804 0%, #1E0B04 50%, #0E0804 100%)",
       },
       animation: {
         "fade-in": "fadeIn 0.6s ease-out forwards",
