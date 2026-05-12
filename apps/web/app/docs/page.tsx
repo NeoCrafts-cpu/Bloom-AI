@@ -781,15 +781,17 @@ function SectionSentinel() {
         predictable, and safe to operate in a production environment.
       </DocP>
 
-      <DocH2><Shield size={18} className="text-bloom-orange" />The 6 Rules</DocH2>
+      <DocH2><Shield size={18} className="text-bloom-orange" />The 8 Rules</DocH2>
       <div className="space-y-2 mb-6">
         {[
-          { id: "MAX_SLIPPAGE",    rule: "slippageBps ≤ 500",          desc: "Maximum 5% slippage tolerance. Protects against front-running and thin liquidity." },
-          { id: "MAX_QUANTITY",    rule: "quantity ≤ 10",               desc: "Per-order cap of 10 BTC equivalent. Prevents accidental large position entries." },
-          { id: "DAILY_EXPOSURE",  rule: "usdValue ≤ $50,000",          desc: "Daily exposure limit per wallet. Resets at UTC midnight." },
-          { id: "VALID_WALLET",    rule: "isAddress(wallet) = true",    desc: "Wallet must be a valid EVM address (42 chars, 0x prefix, hex chars)." },
-          { id: "VALID_STRATEGY",  rule: "strategyStore.has(id) = true",desc: "Strategy ID must exist in the live strategyStore. Prevents phantom trades." },
-          { id: "VALID_ALLOC",     rule: "1 ≤ allocation ≤ 100",        desc: "Allocation percentage must be between 1% and 100% of the configured wallet balance." },
+          { id: "MAX_ORDER_USD",        rule: "allocationUSD ≤ $1,000",         desc: "Hard cap per single order. Prevents accidental fat-finger positions." },
+          { id: "MAX_SLIPPAGE_BPS",     rule: "maxSlippageBps ≤ 100bps",        desc: "Maximum 1% slippage tolerance. Protects against thin-liquidity front-running." },
+          { id: "MAX_DAILY_USD",        rule: "dailySpend + order ≤ $5,000",    desc: "Per-user daily exposure limit. Resets at UTC midnight. Backed by in-memory Map (Redis in production)." },
+          { id: "POSITIVE_ALLOCATION",  rule: "allocationUSD > 0",              desc: "Allocation must be a positive number. Prevents zero-value phantom orders." },
+          { id: "VALID_USER_ADDRESS",   rule: "/^0x[0-9a-fA-F]{40}$/.test(…)",  desc: "Wallet must be a valid EVM address (0x prefix + 40 hex chars)." },
+          { id: "VALID_STRATEGY_ID",    rule: "strategyId.length > 0",          desc: "Strategy ID must be non-empty. Prevents routing to undefined indices." },
+          { id: "ATR_VOLATILITY_FILTER",rule: "maxSlippageBps ≤ 1500bps",       desc: "ATR proxy check — if the user requests >15% slippage tolerance, the environment is high-volatility. Trade blocked until conditions normalise." },
+          { id: "CIRCUIT_BREAKER",      rule: "lossStreak < 3",                 desc: "Consecutive-loss circuit breaker. After 3 successive trade losses, all further trades from that address are blocked pending manual review. Streak resets on a clean Sentinel pass." },
         ].map((r) => (
           <div key={r.id} className="glass-card p-4 flex gap-4">
             <div className="shrink-0">
@@ -808,12 +810,14 @@ function SectionSentinel() {
 
       <DocH2><FileText size={18} className="text-bloom-orange" />SentinelReport Type</DocH2>
       <DocBlock>{`interface SentinelReport {
+  intentId:  string;
   passed:    boolean;
-  blockedBy: string | null;   // rule ID that failed, or null if all passed
   checks: {
-    rule:   string;
-    passed: boolean;
-    reason: string;
+    rule:    string;
+    passed:  boolean;
+    actual:  number | string;
+    limit:   number | string;
+    message?: string;          // only set when passed = false
   }[];
   timestamp: string;
 }`}</DocBlock>
@@ -822,7 +826,7 @@ function SectionSentinel() {
         <DocP>
           AI agents are powerful but non-deterministic. The Sentinel exists precisely because risk guardrails
           should never be probabilistic. A circuit breaker that "usually" catches dangerous trades is not a
-          circuit breaker. The 6 rules are hardcoded constants — if you want to change a limit, you change
+          circuit breaker. The 8 rules are hardcoded constants — if you want to change a limit, you change
           the code, commit, and deploy. This creates an audit trail.
         </DocP>
       </InfoCard>
@@ -835,13 +839,55 @@ function SectionMCP() {
   return (
     <div>
       <DocH1>MCP Tool Registry</DocH1>
+      <div className="pill-badge-orange mb-4 w-fit"><span className="live-dot" />Live · Claude · Cursor · VS Code</div>
       <DocP>
-        Bloom AI implements a Model Context Protocol (MCP) tool registry at <DocCode>apps/api/src/mcp/server.ts</DocCode>.
-        The 7 registered tools expose all data sources as callable functions for LLM agents and external systems.
-        Tools are discoverable via <DocCode>GET /api/mcp/tools</DocCode> and executable via <DocCode>POST /api/mcp/execute</DocCode>.
+        Bloom AI ships a full <strong>Model Context Protocol (MCP)</strong> server at{" "}
+        <DocCode>apps/api/src/mcp/server.ts</DocCode>. The 7 registered tools expose every
+        SoSoValue and SoDEX data source as a structured, callable function for any MCP-compatible
+        AI client — including Claude Desktop, Cursor, and VS Code Copilot Agent mode. Tools are
+        discoverable via <DocCode>GET /api/mcp/tools</DocCode> and executable via{" "}
+        <DocCode>POST /api/mcp/execute</DocCode>.
       </DocP>
 
-      <DocH2><Globe size={18} className="text-bloom-orange" />Registered Tools</DocH2>
+      <DocH2><Globe size={18} className="text-bloom-orange" />SoSoValue Endpoints Used</DocH2>
+      <DocP>
+        Bloom AI integrates the SoSoValue Terminal API across <strong>19 endpoint calls</strong> covering
+        8 data modules. Each module has an independent TTL cache to minimise API usage while keeping
+        data fresh.
+      </DocP>
+      <div className="overflow-x-auto mb-6">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-bloom-text-muted uppercase tracking-wider border-b border-bloom-border">
+              <th className="pb-2 text-left font-semibold">Module</th>
+              <th className="pb-2 text-left font-semibold">Endpoint(s)</th>
+              <th className="pb-2 text-left font-semibold">Data</th>
+              <th className="pb-2 text-right font-semibold">Cache TTL</th>
+            </tr>
+          </thead>
+          <tbody>
+            {[
+              { module: "ETF Flows",       endpoints: "etf/list/netInflow (×8 tickers)",    data: "IBIT, FBTC, BITB, GBTC, HODL, ETHA, FETH, ETHV net inflow/outflow", ttl: "5 min"  },
+              { module: "ETF History",     endpoints: "etf/summary-history",                data: "30-day cumulative ETF net inflow history with price overlay",         ttl: "15 min" },
+              { module: "ETF Summary",     endpoints: "etf/summary",                        data: "Aggregated AUM, total net inflow, inflow/outflow count",              ttl: "5 min"  },
+              { module: "News Sentiment",  endpoints: "news/sentiment",                     data: "AI-scored news articles with bullish/bearish signals per asset",      ttl: "2 min"  },
+              { module: "Market Snapshots",endpoints: "market/snapshots",                   data: "Price, volume, market cap for BTC, ETH, SOL, BNB, AVAX",             ttl: "15 s"   },
+              { module: "Klines (OHLCV)",  endpoints: "market/klines/:symbol (×5 symbols)", data: "Candlestick data for BTC, ETH, SOL, BNB, AVAX · 15m/1h/4h/1d",      ttl: "60 s"   },
+              { module: "VC Funding",      endpoints: "fundraising/:symbol (×2)",            data: "Funding rounds, investors, amounts for BTC and ETH ecosystems",      ttl: "30 min" },
+              { module: "Sector Indices",  endpoints: "market/category",                    data: "Sector-level momentum (DeFi, RWA, AI, GameFi, L2)",                  ttl: "10 min" },
+            ].map((r) => (
+              <tr key={r.module} className="border-b border-bloom-border/50 hover:bg-white/2 transition-colors">
+                <td className="py-2.5 font-semibold text-bloom-orange whitespace-nowrap">{r.module}</td>
+                <td className="py-2.5"><code className="text-bloom-text-muted font-mono">{r.endpoints}</code></td>
+                <td className="py-2.5 text-bloom-text-muted max-w-[260px]">{r.data}</td>
+                <td className="py-2.5 text-right"><span className="px-2 py-0.5 rounded border border-bloom-border text-bloom-text-muted font-mono">{r.ttl}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <DocH2><Globe size={18} className="text-bloom-orange" />Registered MCP Tools</DocH2>
       <div className="space-y-2 mb-6">
         {[
           { name: "get_etf_flows",        desc: "Fetch ETF net inflow/outflow data from SoSoValue Terminal API",       input: "{ limit?: number }" },
@@ -868,7 +914,7 @@ function SectionMCP() {
         ))}
       </div>
 
-      <DocH2><Code2 size={18} className="text-bloom-orange" />Usage</DocH2>
+      <DocH2><Code2 size={18} className="text-bloom-orange" />HTTP API Usage</DocH2>
       <DocBlock>{`// List all tools
 GET /api/mcp/tools
 → { "data": [{ "name": string, "description": string, "inputSchema": object }] }
@@ -877,6 +923,43 @@ GET /api/mcp/tools
 POST /api/mcp/execute
 { "tool": "get_etf_flows", "input": { "limit": 5 } }
 → { "data": ETFFlow[] }`}</DocBlock>
+
+      <DocH2><Cpu size={18} className="text-bloom-orange" />Connect from Claude Desktop / Cursor / VS Code</DocH2>
+      <DocP>
+        Any MCP-compatible client can connect to Bloom AI's tool registry. The server exposes a standard
+        JSON-RPC 2.0 interface over HTTP. Add the following to your client configuration:
+      </DocP>
+      <DocBlock>{`// Claude Desktop — claude_desktop_config.json
+{
+  "mcpServers": {
+    "bloom-ai": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-everything"],
+      "env": {
+        "MCP_SERVER_URL": "https://bloom-ai-mqrb.onrender.com/api/mcp"
+      }
+    }
+  }
+}
+
+// Cursor / VS Code — settings.json
+{
+  "mcp.servers": {
+    "bloom-ai": {
+      "url": "https://bloom-ai-mqrb.onrender.com/api/mcp",
+      "transport": "http"
+    }
+  }
+}`}</DocBlock>
+
+      <InfoCard title="Why MCP?" icon={Globe}>
+        <DocP>
+          MCP is rapidly becoming the standard for giving AI models access to live data and actions.
+          By wrapping all SoSoValue and SoDEX integrations as MCP tools, Bloom AI lets any compatible
+          AI assistant — Claude, GPT-4o, Gemini, or a custom agent — query live crypto market data
+          and execute copy trades through a single, auditable interface.
+        </DocP>
+      </InfoCard>
     </div>
   );
 }

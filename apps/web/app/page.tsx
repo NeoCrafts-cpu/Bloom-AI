@@ -7,7 +7,7 @@ import { useRef } from "react";
 import {
   ArrowUpRight, Zap, Shield, TrendingUp, Brain, Layers,
   ChevronRight, Activity, Globe, Lock, LineChart, BarChart3,
-  BookOpen, Newspaper, Copy, Search,
+  BookOpen, Newspaper, Copy, Search, Cpu,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import LandingNavbar from "@/components/LandingNavbar";
@@ -139,6 +139,26 @@ export default function HomePage() {
                   )}
                 </div>
               ))}
+            </motion.div>
+
+            {/* MCP Server badge row */}
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.8, ease }}
+              className="flex items-center gap-3 mt-5 flex-wrap"
+            >
+              <Link href="/docs#mcp" className="flex items-center gap-2 glass-card px-3 py-1.5 hover:border-bloom-border-hover transition-colors group">
+                <div className="w-5 h-5 rounded bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
+                  <Cpu size={10} className="text-bloom-orange" />
+                </div>
+                <span className="text-[11px] font-semibold text-bloom-text group-hover:text-bloom-orange transition-colors">MCP Server · 7 tools</span>
+                <span className="text-[9px] text-bloom-text-muted font-mono">Claude · Cursor · VS Code</span>
+              </Link>
+              <Link href="/docs" className="flex items-center gap-1.5 glass-card px-3 py-1.5 hover:border-bloom-border-hover transition-colors group">
+                <Globe size={10} className="text-bloom-text-muted group-hover:text-bloom-orange transition-colors" />
+                <span className="text-[11px] text-bloom-text-muted group-hover:text-bloom-text transition-colors font-semibold">19 SoSoValue endpoints</span>
+              </Link>
             </motion.div>
           </div>
 

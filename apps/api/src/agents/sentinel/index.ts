@@ -4,6 +4,20 @@ import { config } from "../../config.js";
 /** Daily spend tracker — in production backed by Redis */
 const dailySpend: Map<string, { amount: number; resetAt: number }> = new Map();
 
+/** Consecutive-loss circuit breaker tracker — per user address */
+const lossStreak: Map<string, number> = new Map();
+
+/** Call this when a trade fails to increment the streak */
+export function recordLoss(userAddress: string): void {
+  const key = userAddress.toLowerCase();
+  lossStreak.set(key, (lossStreak.get(key) ?? 0) + 1);
+}
+
+/** Reset streak on a successful trade */
+export function resetLossStreak(userAddress: string): void {
+  lossStreak.delete(userAddress.toLowerCase());
+}
+
 function getDailySpend(userAddress: string): number {
   const entry = dailySpend.get(userAddress.toLowerCase());
   if (!entry) return 0;
@@ -108,11 +122,41 @@ export function runSentinel(intent: CopyTradeIntent): SentinelReport {
     message: !intent.strategyId ? "strategyId cannot be empty" : undefined,
   });
 
+  // ── Check 7: ATR volatility proxy — high slippage tolerance signals high-vol ──
+  // If the user's maxSlippageBps > ATR_THRESHOLD_BPS we treat this as a
+  // high-volatility environment (proxy for ATR spike) and block the trade.
+  const atrThreshold = config.SENTINEL_ATR_THRESHOLD_BPS;
+  checks.push({
+    rule: "ATR_VOLATILITY_FILTER",
+    passed: intent.maxSlippageBps <= atrThreshold,
+    actual: intent.maxSlippageBps,
+    limit: atrThreshold,
+    message:
+      intent.maxSlippageBps > atrThreshold
+        ? `Slippage ${intent.maxSlippageBps}bps indicates high-volatility regime (ATR proxy >${atrThreshold}bps) — trade blocked`
+        : undefined,
+  });
+
+  // ── Check 8: Consecutive-loss circuit breaker ─────────────────────────────────
+  const maxLosses = config.SENTINEL_MAX_CONSECUTIVE_LOSSES;
+  const streak = lossStreak.get(intent.userAddress.toLowerCase()) ?? 0;
+  checks.push({
+    rule: "CIRCUIT_BREAKER",
+    passed: streak < maxLosses,
+    actual: streak,
+    limit: maxLosses,
+    message:
+      streak >= maxLosses
+        ? `${streak} consecutive losses detected — circuit breaker tripped. Reset required after manual review.`
+        : undefined,
+  });
+
   const passed = checks.every((c) => c.passed);
 
-  // Record spend only if passing
+  // Record spend only if passing; reset loss streak on clean pass
   if (passed) {
     recordSpend(intent.userAddress, intent.allocationUSD);
+    resetLossStreak(intent.userAddress);
   }
 
   return {

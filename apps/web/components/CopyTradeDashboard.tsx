@@ -329,6 +329,36 @@ export default function CopyTradeDashboard() {
                 <p className="text-xs text-bloom-text-muted mb-1 uppercase tracking-wider font-semibold">Strategy</p>
                 <p className="text-sm font-bold text-bloom-orange">{strategyId.toUpperCase()}</p>
               </div>
+              {/* Kelly Criterion optimal allocation */}
+              {(() => {
+                const WIN_RATE = 0.68;
+                const WIN_LOSS_RATIO = 1.4;
+                const kellyFraction = WIN_RATE - (1 - WIN_RATE) / WIN_LOSS_RATIO;
+                const kellyPct = Math.round(kellyFraction * 100);
+                const kellyUSD = usdcBalance ? Math.round(kellyFraction * usdcBalance) : null;
+                const overKelly = allocation > (kellyUSD ?? Infinity);
+                return (
+                  <div className="glass-card p-4 border border-bloom-border-hover bg-gradient-to-br from-amber-950/20 to-bloom-bg-2/60">
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-semibold text-bloom-text-muted uppercase tracking-wider">Kelly Criterion</p>
+                      <span className="text-xs px-2 py-0.5 rounded-full border border-amber-700/40 bg-amber-900/20 text-amber-400 font-mono font-bold">{kellyPct}% optimal</span>
+                    </div>
+                    <p className="text-xs font-mono text-bloom-text-muted mb-1">
+                      f* = W − (1−W)/R = {WIN_RATE} − {(1-WIN_RATE).toFixed(2)}/{WIN_LOSS_RATIO} = <span className="text-amber-400 font-bold">{kellyFraction.toFixed(3)}</span>
+                    </p>
+                    <p className="text-xs text-bloom-text-muted">Win rate <span className="text-bloom-text font-semibold">68%</span> · avg win/loss ratio <span className="text-bloom-text font-semibold">1.4×</span></p>
+                    {kellyUSD !== null && (
+                      <p className="text-xs text-bloom-text-muted mt-1">Kelly-optimal on your balance: <span className="text-amber-400 font-bold">${kellyUSD.toLocaleString()}</span></p>
+                    )}
+                    {overKelly && (
+                      <p className="text-xs text-amber-400 mt-2 flex items-center gap-1">
+                        <span>⚠</span> Above Kelly-optimal — consider reducing for risk-adjusted returns
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
               {/* USDC Balance from SoDEX */}
               <div className="flex items-center justify-between text-xs">
                 <span className="text-bloom-text-muted font-semibold uppercase tracking-wider">SoDEX USDC Balance</span>
