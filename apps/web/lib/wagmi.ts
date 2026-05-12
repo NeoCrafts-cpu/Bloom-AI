@@ -6,14 +6,14 @@ import { defineChain } from "viem";
 export const valueChainTestnet = defineChain({
   id: 138565,
   name: "ValueChain Testnet",
-  nativeCurrency: { name: "VBC", symbol: "VBC", decimals: 18 },
+  nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://testnet-rpc.sodex.dev"] },
+    default: { http: ["https://testnet-rpc.valuechain.xyz"] },
   },
   blockExplorers: {
     default: {
-      name: "ValueChain Explorer",
-      url: "https://explorer-testnet.sosovalue.com",
+      name: "ValueChain Testnet Explorer",
+      url: "https://testnet-scan.valuechain.xyz",
     },
   },
 });

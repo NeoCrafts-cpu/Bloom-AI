@@ -84,7 +84,7 @@ export default function CopyTradeDashboard() {
 
     // Ensure MetaMask is on the right chain before signing
     const TARGET_CHAIN_ID = 138565;
-    const TARGET_CHAIN_HEX = "0x21D85";
+    const TARGET_CHAIN_HEX = "0x21D45";
 
     if (!window.ethereum) {
       alert("MetaMask not detected.");
@@ -106,9 +106,9 @@ export default function CopyTradeDashboard() {
             params: [{
               chainId: TARGET_CHAIN_HEX,
               chainName: "ValueChain Testnet",
-              nativeCurrency: { name: "VBC", symbol: "VBC", decimals: 18 },
-              rpcUrls: ["https://testnet-rpc.sodex.dev"],
-              blockExplorerUrls: ["https://explorer-testnet.sosovalue.com"],
+              nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
+              rpcUrls: ["https://testnet-rpc.valuechain.xyz"],
+              blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
             }],
           });
         } catch {
@@ -243,11 +243,11 @@ export default function CopyTradeDashboard() {
           await eth.request({
             method: "wallet_addEthereumChain",
             params: [{
-              chainId: "0x21D85",
+              chainId: "0x21D45",
               chainName: "ValueChain Testnet",
-              nativeCurrency: { name: "VBC", symbol: "VBC", decimals: 18 },
-              rpcUrls: ["https://testnet-rpc.sodex.dev"],
-              blockExplorerUrls: ["https://explorer-testnet.sosovalue.com"],
+              nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
+              rpcUrls: ["https://testnet-rpc.valuechain.xyz"],
+              blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
             }],
           });
         } catch { /* user rejected add */ }
