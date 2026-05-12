@@ -2,28 +2,31 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Brain, Layers, Zap, Shield } from "lucide-react";
+import { Brain, Layers, Zap, Shield, LineChart } from "lucide-react";
 import type { AgentState } from "@bloom-ai/types";
 
-const AGENT_ICONS = {
-  journalist: Brain,
-  strategist: Layers,
-  broker: Zap,
-  sentinel: Shield,
+const AGENT_ICONS: Record<string, React.ElementType> = {
+  journalist:    Brain,
+  strategist:    Layers,
+  broker:        Zap,
+  sentinel:      Shield,
+  chartanalyst:  LineChart,
 };
 
-const AGENT_LABELS = {
-  journalist: "Journalist",
-  strategist: "Strategist",
-  broker: "Broker",
-  sentinel: "Sentinel",
+const AGENT_LABELS: Record<string, string> = {
+  journalist:   "Journalist",
+  strategist:   "Strategist",
+  broker:       "Broker",
+  sentinel:     "Sentinel",
+  chartanalyst: "Chart Analyst",
 };
 
 const MOCK_INITIAL: AgentState[] = [
-  { name: "journalist", status: "running", lastRun: new Date().toISOString(), message: "Polling SoSoValue Terminal API..." },
-  { name: "strategist", status: "idle", lastRun: new Date(Date.now() - 180000).toISOString() },
-  { name: "broker", status: "idle" },
-  { name: "sentinel", status: "running", message: "Monitoring all payloads" },
+  { name: "journalist",   status: "running", lastRun: new Date().toISOString(), message: "Polling SoSoValue Terminal API..." },
+  { name: "strategist",   status: "idle",    lastRun: new Date(Date.now() - 180000).toISOString() },
+  { name: "broker",       status: "idle" },
+  { name: "sentinel",     status: "running", message: "Monitoring all payloads" },
+  { name: "chartanalyst", status: "idle",    lastRun: new Date(Date.now() - 7200000).toISOString() },
 ];
 
 export default function AgentStatusBar() {
@@ -50,9 +53,10 @@ export default function AgentStatusBar() {
   }, []);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
       {agents.map((agent, i) => {
-        const Icon = AGENT_ICONS[agent.name];
+        const Icon = AGENT_ICONS[agent.name] ?? Brain;
+        const label = AGENT_LABELS[agent.name] ?? agent.name;
         return (
           <motion.div
             key={agent.name}
@@ -85,7 +89,7 @@ export default function AgentStatusBar() {
             <div className="min-w-0">
               <div className="flex items-center gap-1.5 mb-0.5">
                 <span className="text-xs font-semibold text-bloom-text">
-                  {AGENT_LABELS[agent.name]}
+                  {label}
                 </span>
                 {agent.status === "running" && (
                   <span className="live-dot w-1.5 h-1.5" />

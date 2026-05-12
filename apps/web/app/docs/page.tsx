@@ -8,6 +8,7 @@ import {
   Brain, Layers, Zap, Shield, ChevronRight, BookOpen,
   Activity, Globe, Lock, ArrowUpRight, CheckCircle,
   Clock, Circle, Rocket, Code2, Cpu, FileText, BarChart3, Wallet,
+  LineChart, TrendingUp,
 } from "lucide-react";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
@@ -18,6 +19,7 @@ const SECTIONS = [
   { id: "overview",       label: "Overview",            icon: BookOpen   },
   { id: "architecture",   label: "Architecture",        icon: Cpu        },
   { id: "agents",         label: "AI Agents",           icon: Brain      },
+  { id: "market",         label: "Market Intelligence", icon: BarChart3  },
   { id: "apis",           label: "API Reference",       icon: Code2      },
   { id: "strategies",     label: "Strategies (SSI)",    icon: Layers     },
   { id: "copy-trade",     label: "Copy Trade & SoDEX",  icon: Zap        },
@@ -59,7 +61,7 @@ export default function DocsPage() {
           <div className="mt-8 px-2">
             <div className="pill-badge-orange text-xs">
               <span className="live-dot" />
-              v1.0 — Wave 1
+              v2.0 — Wave 2
             </div>
           </div>
         </aside>
@@ -77,6 +79,7 @@ export default function DocsPage() {
               {active === "overview"     && <SectionOverview     />}
               {active === "architecture" && <SectionArchitecture />}
               {active === "agents"       && <SectionAgents       />}
+              {active === "market"       && <SectionMarket       />}
               {active === "apis"         && <SectionAPIs         />}
               {active === "strategies"   && <SectionStrategies   />}
               {active === "copy-trade"   && <SectionCopyTrade    />}
@@ -175,16 +178,18 @@ function SectionOverview() {
       <DocH1>Bloom AI — Agentic Financial Media & Execution Network</DocH1>
       <DocP>
         Bloom AI (AFMEN) is a fully agentic system that bridges real-world financial intelligence with on-chain execution.
-        It transforms macro data — ETF fund flows, crypto sentiment, DeFi TVL — into human-readable Smart Money
-        newsletters, on-chain index strategies, and executed copy-trades on SoDEX — all in a single autonomous loop.
+        It transforms macro data — ETF fund flows, crypto sentiment, DeFi TVL, order book depth, VC funding rounds — into
+        human-readable Smart Money newsletters, technical analysis briefings, on-chain index strategies, and executed
+        copy-trades on SoDEX — all in a single autonomous loop. Zero mock data: every panel shows live API data or an
+        explicit error state.
       </DocP>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         {[
-          { icon: Brain,    title: "AI-Driven Intelligence",  desc: "Four specialized agents handle data ingestion, portfolio synthesis, order execution, and risk management autonomously." },
-          { icon: Layers,   title: "SSI Protocol Native",     desc: "Strategies are minted as on-chain Wrapped Token indices via the SSI Protocol on ValueChain L1." },
-          { icon: Zap,      title: "SoDEX Execution",        desc: "Every copy-trade fires EIP-712 signed orders directly to the SoDEX REST API with Sentinel pre-flight checks." },
-          { icon: BarChart3, title: "SoSoValue Terminal",    desc: "Real ETF inflow/outflow data, AI news sentiment, and market snapshots power the Journalist agent." },
+          { icon: Brain,     title: "5 AI Agents",              desc: "Journalist, Strategist, Broker, Sentinel, and Chart Analyst run autonomously — from raw data ingestion to on-chain execution and technical analysis." },
+          { icon: Layers,    title: "SSI Protocol Native",      desc: "Strategies are minted as on-chain Wrapped Token indices via the SSI Protocol on ValueChain L1." },
+          { icon: Zap,       title: "SoDEX Execution",         desc: "Every copy-trade fires EIP-712 signed orders directly to the SoDEX REST API with Sentinel pre-flight checks." },
+          { icon: BarChart3, title: "8 Live Market Panels",    desc: "OHLCV charts, ETF history, DeFi TVL, L2 order book depth, market heatmap, perps positions, VC funding rounds — all live." },
         ].map((c) => (
           <motion.div key={c.title} whileHover={{ y: -3 }} transition={{ duration: 0.2 }} className="glass-card p-5">
             <div className="flex items-center gap-2 mb-2">
@@ -343,8 +348,8 @@ function SectionAgents() {
     <div>
       <DocH1>AI Agents</DocH1>
       <DocP>
-        Bloom AI runs four specialized agents in the same Node.js process. Each agent has a defined responsibility
-        in the pipeline from raw data to on-chain execution. Three agents are LLM-assisted; the Sentinel is
+        Bloom AI runs five specialized agents in the same Node.js process. Each agent has a defined responsibility
+        in the pipeline from raw data to on-chain execution. Four agents are LLM-assisted; the Sentinel is
         intentionally deterministic and non-AI.
       </DocP>
 
@@ -435,6 +440,30 @@ const RULES: Rule[] = [
   { id: "VALID_ALLOC",    check: (i) => i.alloc >= 1 && i.alloc <= 100},
 ];`,
         },
+        {
+          icon: LineChart, name: "The Chart Analyst", role: "Technical Analysis — RSI · SMA · Pattern Recognition",
+          color: "rgba(232,97,10,0.12)",
+          desc: "The Chart Analyst fetches 24h OHLCV klines for BTC, ETH, and SOL from the SoDEX spot API, computes RSI-14 and Simple Moving Averages, and passes the computed metrics into an OpenRouter LLM to generate a structured technical analysis briefing. It runs on a 2-hour cycle to avoid API rate limits while ensuring dashboards always have a fresh TA snapshot.",
+          details: [
+            { k: "Interval",     v: "5 min initial delay, then every 2 hours" },
+            { k: "LLM",          v: "OpenRouter API (model configurable via OPENROUTER_MODEL)" },
+            { k: "Data sources", v: "SoDEX klines endpoint — 96 × 15-min candles per symbol" },
+            { k: "Indicators",   v: "RSI-14, SMA-20, SMA-50, price vs. SMA cross signals" },
+            { k: "Output",       v: "SmartMoneyNewsletter (type: chartanalyst) — newsletterStore + WS" },
+          ],
+          code: `// apps/api/src/agents/chartanalyst/index.ts
+export async function runChartAnalystCycle(): Promise<void> {
+  const symbols = ["BTC", "ETH", "SOL"];
+  const analyses = await Promise.all(symbols.map(async (sym) => {
+    const klines = await getKlines(sym, "15m", 96);
+    const closes  = klines.map((k) => k.close);
+    return { symbol: sym, rsi14: computeRSI(closes, 14), sma20: computeSMA(closes, 20) };
+  }));
+  const briefing = await generateTABriefing(analyses);
+  newsletterStore.push(briefing);
+  wsManager.broadcast("CHARTANALYST_PUBLISHED", briefing);
+}`,
+        },
       ].map((agent) => (
         <div key={agent.name} className="mb-10">
           <div className="glass-card p-6 mb-4">
@@ -464,6 +493,53 @@ const RULES: Rule[] = [
   );
 }
 
+// ── MARKET INTELLIGENCE ───────────────────────────────────────────────────────
+function SectionMarket() {
+  const panels = [
+    { icon: LineChart,  title: "OHLCV Candlestick Chart",    lib: "lightweight-charts v5",  desc: "Real-time OHLCV candlestick chart with volume histogram. Powered by TradingView's lightweight-charts v5 (breaking API from v4 — uses addSeries(CandlestickSeries) not addCandlestickSeries()). Symbol toggle: BTC, ETH, SOL, BNB, AVAX. Interval: 15m, 1h, 4h, 1d. Auto-refresh every 60s.", endpoints: ["GET /api/market/klines/:symbol?interval=1h&limit=96"] },
+    { icon: TrendingUp, title: "ETF 30-Day History Chart",   lib: "Recharts BarChart",      desc: "Bar chart showing 30 days of BTC ETF net inflow history with green (inflow) / red (outflow) color coding. Fetches from SoSoValue summary-history endpoint. Includes cumulative inflow overlay and 30-day total.", endpoints: ["GET /api/market/etf-history?symbol=BTC&limit=30"] },
+    { icon: BarChart3,  title: "DeFi TVL Leaderboard",       lib: "Custom list UI",         desc: "Top 15 DeFi protocols by Total Value Locked, sourced from DefiLlama. Shows protocol logo, category badge, TVL bar (relative), 24h change, and total TVL header. Refreshes every 3 minutes.", endpoints: ["GET /api/market/defi-tvl"] },
+    { icon: Globe,      title: "Live L2 Order Book",         lib: "Recharts AreaChart",     desc: "Connects via native browser WebSocket to the SoDEX gateway. Subscribes to l2book updates for vBTC_vUSDC. Renders cumulative bid/ask depth as a split AreaChart. Ping keepalive every 30s. Falls back to REST poll every 4s if WebSocket is unavailable.", endpoints: ["WSS wss://testnet-gw.sodex.dev/ws/spot", "GET /api/market/sodex/orderbook/:symbol"] },
+    { icon: Activity,   title: "Market Heatmap",             lib: "Recharts Treemap",       desc: "Treemap visualization where each cell is sized by market cap and colored by 24h price change (green = up, red = down). Custom cell renderer draws symbol labels. Gainers/losers mini-leaderboard below.", endpoints: ["GET /api/market/heatmap"] },
+    { icon: Wallet,     title: "Perps Positions Panel",      lib: "wagmi + viem",           desc: "Connects to wagmi/viem for wallet address. Fetches the user's perps account state from SoDEX — USDC balance, open positions table with entry price, current mark price, unrealized PnL, and margin ratio.", endpoints: ["GET /api/market/perps/:address/state"] },
+    { icon: Zap,        title: "VC Funding Rounds",          lib: "SoSoValue fundraising",  desc: "Displays VC funding round history for top crypto assets. Expandable cards show round type, date, amount raised, investors, and implied valuation. Data from SoSoValue's fundraising endpoint with 30min TTL.", endpoints: ["GET /api/market/fundraising/BTC", "GET /api/market/fundraising/ETH"] },
+    { icon: FileText,   title: "ETF Flows Panel",            lib: "Recharts / SoSoValue",   desc: "Live ETF inflow/outflow for top BTC/ETH ETFs. Shows per-ETF flow bars with net total header. Color-coded: green = inflow, red = outflow. 5-minute TTL cache on the server.", endpoints: ["GET /api/market/etf-flows"] },
+  ];
+
+  return (
+    <div>
+      <DocH1>Market Intelligence Panels</DocH1>
+      <DocP>
+        All 8 market intelligence panels are lazy-loaded with{" "}
+        <code className="text-bloom-orange">dynamic(() =&gt; import(...), {"{"} ssr: false {"}"})</code>{" "}
+        to prevent SSR hydration mismatches. Each panel fetches its own data independently with a stale-while-revalidate
+        pattern — a loading skeleton is shown until data arrives, and error states fall through gracefully.
+      </DocP>
+      <div className="grid grid-cols-1 gap-6">
+        {panels.map((p) => (
+          <div key={p.title} className="glass-card p-5">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center bg-bloom-orange-dim border border-bloom-border-hover">
+                <p.icon size={16} className="text-bloom-orange" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-bloom-text">{p.title}</h3>
+                <Badge variant="outline">{p.lib}</Badge>
+              </div>
+            </div>
+            <DocP>{p.desc}</DocP>
+            <div className="flex flex-wrap gap-2 mt-3">
+              {p.endpoints.map((e) => (
+                <code key={e} className="text-xs bg-white/5 border border-bloom-border rounded px-2 py-1 text-bloom-orange">{e}</code>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ── APIS ──────────────────────────────────────────────────────────────────────
 function SectionAPIs() {
   const endpoints = [
@@ -472,7 +548,7 @@ function SectionAPIs() {
     { method: "GET",  path: "/api/newsletters/stream",              desc: "SSE stream — INITIAL bulk + live JOURNALIST_PUBLISHED events",res: `event: data\ndata: { type, payload }` },
     { method: "POST", path: "/api/newsletters/trigger",             desc: "Manually trigger a Journalist cycle",                       res: `{ "data": SmartMoneyNewsletter }` },
     { method: "GET",  path: "/api/strategies",                      desc: "List all SSI index strategies",                             res: `{ "data": SSIIndex[] }` },
-    { method: "GET",  path: "/api/agents",                          desc: "Live status of all four agents",                            res: `{ "data": AgentState[] }` },
+    { method: "GET",  path: "/api/agents",                          desc: "Live status of all five agents (journalist, strategist, broker, sentinel, chartanalyst)", res: `{ "data": AgentState[] }` },
     { method: "GET",  path: "/api/market/prices",                   desc: "Live prices — SoDEX first, CoinGecko fallback, TTL 15s",    res: `{ "data": MarketSnapshot[], "meta": { cachedAt, isStale } }` },
     { method: "GET",  path: "/api/market/etf-flows",                desc: "ETF net inflow/outflow — SoSoValue, TTL 5min",              res: `{ "data": ETFFlowData[], "meta": { cachedAt, isStale } }` },
     { method: "GET",  path: "/api/market/sentiment",                desc: "AI news sentiment — SoSoValue, TTL 2min, ?limit=",          res: `{ "data": NewsSentiment[], "meta": { cachedAt, isStale } }` },
@@ -484,6 +560,14 @@ function SectionAPIs() {
     { method: "GET",  path: "/api/market/account/:address/state",   desc: "Real-time SoDEX account balances + open orders count",      res: `{ "data": { accountID, balances, openOrdersCount } }` },
     { method: "GET",  path: "/api/market/account/:address/orders/history", desc: "SoDEX order history for address, ?symbol, ?limit", res: `{ "data": Order[] }` },
     { method: "GET",  path: "/api/market/account/:address/trades",  desc: "SoDEX trade history for address, ?symbol, ?limit",         res: `{ "data": Trade[] }` },
+    { method: "GET",  path: "/api/market/klines/:symbol",           desc: "OHLCV klines from SoDEX — ?interval=15m|1h|4h|1d&limit=96", res: `{ "data": { time, open, high, low, close, volume }[] }` },
+    { method: "GET",  path: "/api/market/defi-tvl",                 desc: "Top 20 DeFi protocols by TVL — DefiLlama, TTL 5min",       res: `{ "data": { name, tvl, change_1d, category, logo }[] }` },
+    { method: "GET",  path: "/api/market/heatmap",                  desc: "Market caps + 24h changes for top assets, TTL 3min",       res: `{ "data": { symbol, name, marketCap, change24h, price }[] }` },
+    { method: "GET",  path: "/api/market/etf-history",              desc: "30-day ETF flow history — SoSoValue summary-history",      res: `{ "data": { date, netInflow, cumulativeInflow, price }[] }` },
+    { method: "GET",  path: "/api/market/fundraising/:symbol",      desc: "VC funding rounds — SoSoValue fundraising, TTL 30min",     res: `{ "data": { date, amount, investors, round, valuation }[] }` },
+    { method: "GET",  path: "/api/market/perps/mark-prices",        desc: "SoDEX perps mark prices for all symbols",                  res: `{ "data": { symbol, markPrice, indexPrice, fundingRate }[] }` },
+    { method: "GET",  path: "/api/market/perps/symbols",            desc: "SoDEX perps symbol list",                                  res: `{ "data": PerpSymbol[] }` },
+    { method: "GET",  path: "/api/market/perps/:address/state",     desc: "SoDEX perps account state — balances, open positions, PnL",res: `{ "data": { balance, positions: Position[] } }` },
     { method: "POST", path: "/api/sentinel/check",                  desc: "Run Sentinel risk checks on a copy-trade intent",           res: `{ "data": SentinelReport }` },
     { method: "POST", path: "/api/broker/execute",                  desc: "Execute a copy-trade: Sentinel + real SoDEX orders",        res: `{ "data": CopyTradeResult }` },
     { method: "POST", path: "/api/copy-trade",                      desc: "High-level copy-trade intent submission",                   res: `{ "data": CopyTradeResult }` },
