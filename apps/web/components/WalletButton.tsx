@@ -11,7 +11,7 @@ const VC_CHAIN_PARAMS  = {
   chainId:         TARGET_CHAIN_HEX,
   chainName:       "ValueChain Testnet",
   nativeCurrency:  { name: "SOSO", symbol: "SOSO", decimals: 18 },
-  rpcUrls:         ["https://testnet-rpc.valuechain.xyz"],
+  rpcUrls:         ["https://testnet.valuechain.xyz"],
   blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
 };
 
