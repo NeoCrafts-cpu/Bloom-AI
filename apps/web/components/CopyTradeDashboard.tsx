@@ -156,7 +156,11 @@ export default function CopyTradeDashboard() {
       setUserSignature(sig);
       await runSentinelAndExecute(sig);
     } catch (err) {
-      // User rejected signing
+      // User rejected signing or chain mismatch
+      const msg = String((err as Error)?.message ?? err);
+      if (msg.includes("ChainMismatch") || msg.includes("chain")) {
+        alert("Chain mismatch detected. Please disconnect your wallet, refresh the page, and reconnect.");
+      }
       console.error("Signing rejected", err);
       setStep("configure");
     } finally {

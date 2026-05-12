@@ -144,16 +144,16 @@ export default function ETFFlowsPanel() {
                       <div>
                         <p className="text-xs font-bold text-bloom-text">{flow.ticker}</p>
                         <p className="text-xs text-bloom-text-muted">
-                          AUM ${(flow.totalAUM / 1e9).toFixed(1)}B
+                          AUM ${((flow.totalAUM ?? 0) / 1e9).toFixed(1)}B
                         </p>
                       </div>
                     </div>
                     <div className="text-right">
                       <p className={`text-xs font-bold ${isPositive ? "text-emerald-400" : "text-red-400"}`}>
-                        {isPositive ? "+" : ""}${(flow.netInflow / 1e6).toFixed(0)}M
+                        {isPositive ? "+" : ""}${((flow.netInflow ?? 0) / 1e6).toFixed(0)}M
                       </p>
                       <p className={`text-xs ${flow.change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        {flow.change24h >= 0 ? "+" : ""}{flow.change24h.toFixed(2)}%
+                        {(flow.change24h ?? 0) >= 0 ? "+" : ""}{(flow.change24h ?? 0).toFixed(2)}%
                       </p>
                     </div>
                   </div>

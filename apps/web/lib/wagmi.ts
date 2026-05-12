@@ -1,4 +1,4 @@
-import { createConfig, http } from "wagmi";
+import { createConfig, http, createStorage, cookieStorage } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { defineChain } from "viem";
 
@@ -25,4 +25,6 @@ export const wagmiConfig = createConfig({
     [valueChainTestnet.id]: http(),
   },
   ssr: true,
+  // v2 — bump storage key so stale chain-138629 connections are dropped
+  storage: createStorage({ storage: cookieStorage, key: "wagmi-vc-v2" }),
 });

@@ -26,8 +26,8 @@ export default function MarketTicker() {
           setTickers(
             list.map((m: { symbol: string; price: number; change24h: number }) => ({
               symbol: m.symbol,
-              price: m.price.toLocaleString(undefined, { maximumFractionDigits: 2 }),
-              change: m.change24h,
+              price: (m.price ?? 0).toLocaleString(undefined, { maximumFractionDigits: 2 }),
+              change: m.change24h ?? 0,
             }))
           );
           setIsStale(!!data?.meta?.isStale);
