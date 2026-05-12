@@ -6,6 +6,46 @@ import { motion } from "framer-motion";
 import { TrendingUp, TrendingDown, Layers, ArrowUpRight } from "lucide-react";
 import type { SSIIndex } from "@bloom-ai/types";
 
+// Deterministic sparkline data per strategy (seeded, not random)
+const SPARKLINE_DATA: Record<string, number[]> = {
+  "ssi-rwa-001":  [100, 101.2, 100.8, 102.4, 103.1, 102.6, 104.2, 105.8, 105.3, 106.9, 107.5, 107.1, 109.2, 110.4, 114.2],
+  "ssi-defi-002": [100, 102.4, 101.8, 105.2, 108.3, 106.9, 112.1, 118.5, 115.9, 121.4, 124.7, 122.3, 128.8, 130.5, 131.7],
+  "ssi-mag7-003": [100, 101.8, 101.2, 103.7, 105.2, 104.5, 107.3, 110.1, 109.4, 112.8, 114.6, 113.9, 118.2, 120.7, 122.5],
+};
+
+const PERF_30D: Record<string, { pct: number; label: string }> = {
+  "ssi-rwa-001":  { pct: 14.2, label: "30d" },
+  "ssi-defi-002": { pct: 31.7, label: "30d" },
+  "ssi-mag7-003": { pct: 22.5, label: "30d" },
+};
+
+function Sparkline({ data, positive }: { data: number[]; positive: boolean }) {
+  const min = Math.min(...data);
+  const max = Math.max(...data);
+  const range = max - min || 1;
+  const w = 80;
+  const h = 28;
+  const points = data
+    .map((v, i) => {
+      const x = (i / (data.length - 1)) * w;
+      const y = h - ((v - min) / range) * h;
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    })
+    .join(" ");
+  return (
+    <svg width={w} height={h} className="shrink-0">
+      <polyline
+        points={points}
+        fill="none"
+        stroke={positive ? "#34d399" : "#f87171"}
+        strokeWidth="1.5"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
+
 const MOCK_STRATEGIES: SSIIndex[] = [
   {
     id: "ssi-rwa-001",
@@ -90,7 +130,9 @@ export default function StrategiesGrid() {
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
       {strategies.map((strategy, i) => {
-        const perf = PERF_MOCK[strategy.id] ?? 0;
+        const perf     = PERF_MOCK[strategy.id] ?? 0;
+          const perf30d   = PERF_30D[strategy.id];
+          const sparkData = SPARKLINE_DATA[strategy.id];
         return (
           <motion.div
             key={strategy.id}
@@ -115,21 +157,28 @@ export default function StrategiesGrid() {
                   {strategy.name}
                 </h3>
               </div>
-              <div
-                className={`flex items-center gap-1 text-sm font-bold ${
-                  perf >= 0 ? "text-emerald-400" : "text-red-400"
-                }`}
-              >
-                {perf >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                {perf >= 0 ? "+" : ""}
-                {perf.toFixed(1)}%
+              <div className="flex flex-col items-end gap-1.5">
+                <div
+                  className={`flex items-center gap-1 text-sm font-bold ${
+                    perf >= 0 ? "text-emerald-400" : "text-red-400"
+                  }`}
+                >
+                  {perf >= 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
+                  {perf >= 0 ? "+" : ""}{perf.toFixed(1)}%
+                </div>
+                <span className="text-[10px] text-bloom-text-muted font-medium">{perf30d?.label ?? "30d"}</span>
               </div>
             </div>
 
-            {/* Description */}
-            <p className="text-xs text-bloom-text-muted leading-relaxed">
-              {strategy.description}
-            </p>
+            {/* Sparkline */}
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-bloom-text-muted leading-relaxed flex-1 mr-3">
+                {strategy.description}
+              </p>
+              {sparkData && (
+                <Sparkline data={sparkData} positive={perf >= 0} />
+              )}
+            </div>
 
             {/* Asset weights */}
             <div>
