@@ -1,0 +1,210 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --color-bg: #0A0703;
+  --color-orange: #E8610A;
+  --color-orange-light: #F5A020;
+  --color-text: #F5F0E8;
+  --color-muted: #A8A09A;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 4px;
+}
+::-webkit-scrollbar-track {
+  background: #120D06;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(232, 97, 10, 0.4);
+  border-radius: 2px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(232, 97, 10, 0.7);
+}
+
+/* Selection */
+::selection {
+  background: rgba(232, 97, 10, 0.3);
+  color: #F5F0E8;
+}
+
+/* Glass card base */
+@layer components {
+  .glass-card {
+    @apply bg-bloom-bg-card backdrop-blur-md border border-bloom-border rounded-2xl;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.05);
+  }
+
+  .glass-card-hover {
+    @apply glass-card transition-all duration-300 hover:border-bloom-border-hover hover:shadow-orange-glow;
+  }
+
+  .orange-gradient-text {
+    @apply bg-gradient-orange bg-clip-text text-transparent;
+  }
+
+  .orange-btn {
+    @apply bg-bloom-orange text-bloom-bg font-semibold rounded-full px-6 py-2.5 transition-all duration-200 hover:bg-bloom-orange-light hover:shadow-orange-glow active:scale-95;
+  }
+
+  .orange-btn-outline {
+    @apply border border-bloom-orange text-bloom-orange font-semibold rounded-full px-6 py-2.5 transition-all duration-200 hover:bg-bloom-orange-dim active:scale-95;
+  }
+
+  .pill-badge {
+    @apply inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-medium bg-bloom-bg-card border border-bloom-border text-bloom-text-muted;
+  }
+
+  .pill-badge-orange {
+    @apply inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-bloom-orange-dim border border-bloom-border-hover text-bloom-orange;
+  }
+
+  /* Live dot */
+  .live-dot {
+    @apply relative inline-block w-2 h-2 rounded-full bg-bloom-orange;
+  }
+  .live-dot::before {
+    content: '';
+    @apply absolute inset-0 rounded-full bg-bloom-orange animate-ping opacity-75;
+  }
+
+  /* Agent status indicator */
+  .agent-running { @apply text-bloom-orange; }
+  .agent-idle { @apply text-bloom-text-muted; }
+  .agent-error { @apply text-red-400; }
+
+  /* Stat card */
+  .stat-card {
+    @apply glass-card p-5 flex flex-col gap-1;
+  }
+}
+
+/* Animated gradient border */
+.gradient-border {
+  position: relative;
+  background: linear-gradient(#0A0703, #0A0703) padding-box,
+    linear-gradient(135deg, #E8610A, #F5A020, #E8610A) border-box;
+  border: 1px solid transparent;
+}
+
+/* Number ticker animation */
+@keyframes numberTick {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.number-tick { animation: numberTick 0.2s ease-out; }
+
+/* Candlestick chart custom */
+.recharts-tooltip-wrapper {
+  outline: none !important;
+}
+
+/* Full-page loading shimmer */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.07) 50%, rgba(255,255,255,0.03) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite;
+}
+
+/* ── Additional animation keyframes ───────────────────────────────────────── */
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-8px); }
+}
+.animate-float {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+  0%, 100% { box-shadow: 0 0 12px rgba(232,97,10,0.25); }
+  50%       { box-shadow: 0 0 32px rgba(232,97,10,0.55); }
+}
+.animate-glow-pulse {
+  animation: glowPulse 2.5s ease-in-out infinite;
+}
+
+/* Flower logo — float + glow drop-shadow pulse */
+@keyframes flowerFloat {
+  0%, 100% { transform: translateY(0px) scale(1); filter: drop-shadow(0 0 18px rgba(232,97,10,0.55)); }
+  50%       { transform: translateY(-10px) scale(1.04); filter: drop-shadow(0 0 36px rgba(245,160,32,0.75)); }
+}
+.animate-flower {
+  animation: flowerFloat 3.5s ease-in-out infinite;
+}
+
+/* Navbar flower — subtle pulse + glow */
+@keyframes navFlower {
+  0%, 100% { filter: drop-shadow(0 0 6px rgba(232,97,10,0.5)); transform: scale(1); }
+  50%       { filter: drop-shadow(0 0 14px rgba(245,160,32,0.85)); transform: scale(1.08); }
+}
+.animate-nav-flower {
+  animation: navFlower 2.8s ease-in-out infinite;
+}
+
+@keyframes borderSpin {
+  0%   { background-position: 0% 50%; }
+  50%  { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Smooth scroll progress bar (top of page) */
+@keyframes scrollProgress {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+/* Cursor glow spotlight — applied via JS in CursorGlow component */
+.cursor-glow {
+  pointer-events: none;
+  position: fixed;
+  width: 480px;
+  height: 480px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(232,97,10,0.07) 0%, transparent 70%);
+  transform: translate(-50%, -50%);
+  transition: left 0.08s ease, top 0.08s ease;
+  z-index: 5;
+  will-change: left, top;
+}

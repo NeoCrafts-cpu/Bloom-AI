@@ -1,0 +1,24 @@
+/** @type {import('next').NextConfig} */
+const nextConfig = {
+  reactStrictMode: true,
+  transpilePackages: ["@bloom-ai/types"],
+  serverExternalPackages: [],
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "**.sosovalue.com" },
+      { protocol: "https", hostname: "assets.coingecko.com" },
+    ],
+  },
+  webpack(config) {
+    // @metamask/sdk (pulled in transitively by wagmi/connectors) tries to
+    // import React Native packages that don't exist in a web environment.
+    // Stub them out so webpack doesn't fail during static generation.
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      "@react-native-async-storage/async-storage": false,
+    };
+    return config;
+  },
+};
+
+module.exports = nextConfig;
