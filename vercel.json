@@ -1,5 +1,5 @@
 {
-  "buildCommand": "npm run build --workspace=packages/types && npm run build --workspace=apps/web",
+  "buildCommand": "ROOT=$(git rev-parse --show-toplevel) && npm --prefix $ROOT/packages/types run build && npm --prefix $ROOT/apps/web run build",
   "outputDirectory": "apps/web/.next",
   "installCommand": "npm install --legacy-peer-deps",
   "devCommand": "npm run dev:web",
