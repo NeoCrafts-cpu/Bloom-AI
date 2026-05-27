@@ -1,5 +1,4 @@
 import { createConfig, http } from "wagmi";
-import { mainnet } from "wagmi/chains";
 import { injected } from "wagmi/connectors";
 import { defineChain } from "viem";
 
@@ -20,11 +19,10 @@ export const valueChainTestnet = defineChain({
 });
 
 export const wagmiConfig = createConfig({
-  chains: [valueChainTestnet, mainnet],
+  chains: [valueChainTestnet],
   connectors: [injected()],
   transports: {
     [valueChainTestnet.id]: http(),
-    [mainnet.id]: http(),
   },
   ssr: true,
 });

@@ -89,7 +89,7 @@ export default function CopyTradeDashboard() {
         domain: {
           name:    "Bloom AI",
           version: "1",
-          chainId: chain?.id ?? 1,
+          chainId: chain?.id ?? 138565,
         },
         types: AUTHORIZATION_TYPES,
         primaryType: "CopyTradeAuth",
