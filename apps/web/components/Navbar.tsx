@@ -7,6 +7,7 @@ import { useState } from "react";
 import { Menu, X } from "lucide-react";
 import { clsx } from "clsx";
 import WalletButton from "@/components/WalletButton";
+import BloomBackground from "@/components/BloomBackground";
 
 const NAV_LINKS = [
   { label: "Terminal",    href: "/terminal"   },
@@ -22,6 +23,7 @@ export default function Navbar() {
 
   return (
     <>
+      <BloomBackground />
       <nav className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4">
         {/* Logo */}
         <Link href="/" className="flex items-center gap-1.5 shrink-0">
