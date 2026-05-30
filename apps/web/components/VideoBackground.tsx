@@ -34,7 +34,7 @@ export default function VideoBackground() {
         style={{ opacity: 0, transition: "opacity 0.8s ease" }}
       />
       {/* Dark overlay so text remains readable */}
-      <div className="absolute inset-0 bg-bloom-bg/60" />
+      <div className="absolute inset-0 bg-black/70" />
     </div>
   );
 }
