@@ -73,7 +73,7 @@ export default function StrategiesGrid() {
     const fetchStrategies = async () => {
       try {
         const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/strategies`
+          "/api/strategies"
         );
         if (res.ok) {
           const data = await res.json();

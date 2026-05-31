@@ -23,7 +23,7 @@ const AUTHORIZATION_TYPES = {
   ],
 } as const;
 
-const API = "/api";
+const API = "";
 
 export default function CopyTradeDashboard() {
   const searchParams = useSearchParams();
@@ -83,14 +83,55 @@ export default function CopyTradeDashboard() {
     setStep("signing");
 
     // Ensure MetaMask is on the right chain before signing
-    try {
-      await addValueChainNetwork();
-    } catch {
-      // continue — wallet may already be on correct chain
+    const TARGET_CHAIN_ID = 138565;
+    const TARGET_CHAIN_HEX = "0x21D85";
+
+    if (!window.ethereum) {
+      alert("MetaMask not detected.");
+      setStep("configure");
+      setIsLoading(false);
+      return;
     }
 
-    // Small delay to let chain switch settle
-    await new Promise((r) => setTimeout(r, 500));
+    const eth = window.ethereum as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
+
+    // Try to switch; if not added, add it
+    try {
+      await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: TARGET_CHAIN_HEX }] });
+    } catch (switchErr: unknown) {
+      if ((switchErr as { code?: number })?.code === 4902) {
+        try {
+          await eth.request({
+            method: "wallet_addEthereumChain",
+            params: [{
+              chainId: TARGET_CHAIN_HEX,
+              chainName: "ValueChain Testnet",
+              nativeCurrency: { name: "VBC", symbol: "VBC", decimals: 18 },
+              rpcUrls: ["https://testnet-rpc.sodex.dev"],
+              blockExplorerUrls: ["https://explorer-testnet.sosovalue.com"],
+            }],
+          });
+        } catch {
+          setStep("configure");
+          setIsLoading(false);
+          return;
+        }
+      } else {
+        // User rejected switch
+        setStep("configure");
+        setIsLoading(false);
+        return;
+      }
+    }
+
+    // Verify the active chain is now correct
+    const currentChainId = await eth.request({ method: "eth_chainId" }) as string;
+    if (parseInt(currentChainId, 16) !== TARGET_CHAIN_ID) {
+      alert(`Please switch MetaMask to ValueChain Testnet (Chain ID ${TARGET_CHAIN_ID}) before signing.`);
+      setStep("configure");
+      setIsLoading(false);
+      return;
+    }
 
     const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
 
@@ -99,7 +140,7 @@ export default function CopyTradeDashboard() {
         domain: {
           name:    "Bloom AI",
           version: "1",
-          chainId: chain?.id ?? 138565,
+          chainId: TARGET_CHAIN_ID,
         },
         types: AUTHORIZATION_TYPES,
         primaryType: "CopyTradeAuth",

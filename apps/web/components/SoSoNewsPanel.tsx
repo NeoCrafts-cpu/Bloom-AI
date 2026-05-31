@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Newspaper, RefreshCw, ExternalLink, TrendingUp, TrendingDown, Minus } from "lucide-react";
 import type { NewsSentiment } from "@bloom-ai/types";
 
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+const API = "";
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
