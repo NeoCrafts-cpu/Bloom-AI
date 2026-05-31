@@ -33,9 +33,7 @@ export default function AgentStatusBar() {
   useEffect(() => {
     const poll = async () => {
       try {
-        const res = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000"}/api/agents`
-        );
+        const res = await fetch("/api/agents");
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null;

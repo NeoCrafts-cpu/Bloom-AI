@@ -16,13 +16,14 @@ export default function OrderFeedPanel() {
 
   useEffect(() => {
     // Subscribe to WebSocket for real-time order feed
-    const wsUrl = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000")
-      .replace("http://", "ws://")
-      .replace("https://", "wss://");
+    const wsBase =
+      typeof window !== "undefined" && window.location.hostname !== "localhost"
+        ? "wss://bloom-ai-mqrb.onrender.com"
+        : "ws://localhost:4000";
 
     let ws: WebSocket | null = null;
     try {
-      ws = new WebSocket(`${wsUrl}/ws/orders`);
+      ws = new WebSocket(`${wsBase}/ws/orders`);
       ws.onmessage = (event) => {
         try {
           const fill: OrderFill = JSON.parse(event.data);
