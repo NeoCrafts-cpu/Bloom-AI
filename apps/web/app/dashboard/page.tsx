@@ -12,16 +12,16 @@ import Navbar from "@/components/Navbar";
 import AgentStatusBar from "@/components/AgentStatusBar";
 import MarketTicker from "@/components/MarketTicker";
 import ETFFlowsPanel from "@/components/ETFFlowsPanel";
-import ETFHistoryChart from "@/components/ETFHistoryChart";
-import DefiTVLPanel from "@/components/DefiTVLPanel";
-import PerpsPositionsPanel from "@/components/PerpsPositionsPanel";
-import VCFundingPanel from "@/components/VCFundingPanel";
-import LiveOrderBook from "@/components/LiveOrderBook";
-import MarketHeatmap from "@/components/MarketHeatmap";
 import type { MarketSnapshot, ETFFlowData, SmartMoneyNewsletter } from "@bloom-ai/types";
 
-// dynamic import — lightweight-charts requires DOM, can't run on server
-const PriceKlinesChart = dynamic(() => import("@/components/PriceKlinesChart"), { ssr: false });
+// All new data-heavy / chart / WS components are client-only
+const PriceKlinesChart  = dynamic(() => import("@/components/PriceKlinesChart"),  { ssr: false });
+const ETFHistoryChart   = dynamic(() => import("@/components/ETFHistoryChart"),   { ssr: false });
+const DefiTVLPanel      = dynamic(() => import("@/components/DefiTVLPanel"),      { ssr: false });
+const PerpsPositionsPanel = dynamic(() => import("@/components/PerpsPositionsPanel"), { ssr: false });
+const VCFundingPanel    = dynamic(() => import("@/components/VCFundingPanel"),    { ssr: false });
+const LiveOrderBook     = dynamic(() => import("@/components/LiveOrderBook"),     { ssr: false });
+const MarketHeatmap     = dynamic(() => import("@/components/MarketHeatmap"),     { ssr: false });
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 const API = "";

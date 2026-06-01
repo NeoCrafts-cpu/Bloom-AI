@@ -1,8 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { motion } from "framer-motion";
-import { DollarSign, Users, Calendar, TrendingUp, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { DollarSign, Users, Calendar, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
 
 interface Investor {
   name: string;
@@ -141,7 +140,7 @@ export default function VCFundingPanel() {
           {rounds.map((r) => {
             const isOpen = expanded === r.round_id;
             return (
-              <motion.div key={r.round_id} className="bg-bloom-card-hover rounded-xl overflow-hidden">
+              <div key={r.round_id} className="bg-bloom-card-hover rounded-xl overflow-hidden">
                 <button
                   onClick={() => setExpanded(isOpen ? null : r.round_id)}
                   className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-bloom-card transition-colors"
@@ -166,17 +165,12 @@ export default function VCFundingPanel() {
                 </button>
 
                 {isOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="px-3 pb-3"
-                  >
+                  <div className="px-3 pb-3 border-t border-bloom-border/40">
                     {r.valuation && (
-                      <p className="text-[10px] text-bloom-text-muted mb-2">Valuation: {r.valuation}</p>
+                      <p className="text-[10px] text-bloom-text-muted mt-2 mb-2">Valuation: {r.valuation}</p>
                     )}
                     {r.investors.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
+                      <div className="flex flex-wrap gap-1.5 mt-2">
                         {r.investors.map((inv) => (
                           <div
                             key={inv.name}
@@ -195,9 +189,9 @@ export default function VCFundingPanel() {
                         ))}
                       </div>
                     )}
-                  </motion.div>
+                  </div>
                 )}
-              </motion.div>
+              </div>
             );
           })}
         </div>
