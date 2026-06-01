@@ -69,12 +69,19 @@ export const cache = new TTLCache();
 
 // TTL constants (ms)
 export const TTL = {
-  ETF_FLOWS:     5 * 60 * 1000,  // 5 min — SoSoValue has strict rate limits
-  NEWS_SENTIMENT: 2 * 60 * 1000, // 2 min
-  MARKET_PRICES:     15 * 1000,  // 15s — SoDEX tickers are public + no rate limit
-  SODEX_ORDERBOOK:   10 * 1000,  // 10s
-  SODEX_SYMBOLS:  10 * 60 * 1000, // 10 min — symbols rarely change
-  ACCOUNT_STATE:     30 * 1000,  // 30s
-  DEFI_TVL:      15 * 60 * 1000, // 15 min
-  CRYPTO_NEWS:    5 * 60 * 1000, // 5 min
+  ETF_FLOWS:       5 * 60 * 1000,  // 5 min
+  ETF_HISTORY:    10 * 60 * 1000,  // 10 min
+  NEWS_SENTIMENT:  2 * 60 * 1000,  // 2 min
+  MARKET_PRICES:      15 * 1000,   // 15s
+  SODEX_ORDERBOOK:    10 * 1000,   // 10s
+  SODEX_SYMBOLS:  10 * 60 * 1000,  // 10 min
+  ACCOUNT_STATE:      30 * 1000,   // 30s
+  DEFI_TVL:      15 * 60 * 1000,   // 15 min
+  CRYPTO_NEWS:    5 * 60 * 1000,   // 5 min
+  CURRENCY_LIST:  60 * 60 * 1000,  // 1 hr — stable
+  FUNDRAISING:    30 * 60 * 1000,  // 30 min
+  KLINES:          5 * 60 * 1000,  // 5 min
+  PERPS_ACCOUNT:      30 * 1000,   // 30s
+  MARK_PRICES:        15 * 1000,   // 15s
+  HEATMAP:         5 * 60 * 1000,  // 5 min
 } as const;

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
+import dynamic from "next/dynamic";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
@@ -11,7 +12,16 @@ import Navbar from "@/components/Navbar";
 import AgentStatusBar from "@/components/AgentStatusBar";
 import MarketTicker from "@/components/MarketTicker";
 import ETFFlowsPanel from "@/components/ETFFlowsPanel";
+import ETFHistoryChart from "@/components/ETFHistoryChart";
+import DefiTVLPanel from "@/components/DefiTVLPanel";
+import PerpsPositionsPanel from "@/components/PerpsPositionsPanel";
+import VCFundingPanel from "@/components/VCFundingPanel";
+import LiveOrderBook from "@/components/LiveOrderBook";
+import MarketHeatmap from "@/components/MarketHeatmap";
 import type { MarketSnapshot, ETFFlowData, SmartMoneyNewsletter } from "@bloom-ai/types";
+
+// dynamic import — lightweight-charts requires DOM, can't run on server
+const PriceKlinesChart = dynamic(() => import("@/components/PriceKlinesChart"), { ssr: false });
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 const API = "";
@@ -348,6 +358,52 @@ export default function DashboardPage() {
           </motion.div>
 
         </div>
+
+        {/* ── Market Intelligence Section ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.45, ease }}
+          className="mt-10"
+        >
+          <div className="flex items-center gap-3 mb-6">
+            <div className="pill-badge-orange w-fit">
+              <span className="live-dot" />
+              Market Intelligence
+            </div>
+            <h2 className="text-xl font-bold text-bloom-text">
+              Advanced <span className="orange-gradient-text">Analytics</span>
+            </h2>
+          </div>
+
+          {/* Row 1: Price Chart + DeFi TVL */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
+            <div className="xl:col-span-2">
+              <PriceKlinesChart />
+            </div>
+            <div>
+              <DefiTVLPanel />
+            </div>
+          </div>
+
+          {/* Row 2: ETF History + Market Heatmap */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+            <ETFHistoryChart />
+            <MarketHeatmap />
+          </div>
+
+          {/* Row 3: Live Order Book (full width) */}
+          <div className="mb-5">
+            <LiveOrderBook />
+          </div>
+
+          {/* Row 4: Perps Positions + VC Funding */}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+            <PerpsPositionsPanel />
+            <VCFundingPanel />
+          </div>
+        </motion.div>
+
       </div>
     </div>
   );

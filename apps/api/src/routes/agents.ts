@@ -5,9 +5,16 @@ import {
   stopJournalistAgent,
   runJournalistCycle,
 } from "../agents/journalist/index.js";
+import {
+  startChartAnalystAgent,
+  stopChartAnalystAgent,
+  runChartAnalystCycle,
+  chartAnalystStatus,
+} from "../agents/chartanalyst/index.js";
 
 const agentStates: Record<string, AgentState> = {
   journalist: { name: "journalist", status: "running" },
+  chartanalyst: { name: "chartanalyst" as AgentState["name"], status: "idle" },
   strategist: { name: "strategist", status: "idle" },
   broker: { name: "broker", status: "idle" },
   sentinel: { name: "sentinel", status: "idle" },
@@ -44,6 +51,17 @@ export async function agentRouter(app: FastifyInstance) {
       agentStates.journalist.lastRun = new Date().toISOString();
       return { data: result };
     }
+    if (name === "chartanalyst") {
+      agentStates.chartanalyst = { name: "chartanalyst" as AgentState["name"], status: "running", lastRun: new Date().toISOString() };
+      const result = await runChartAnalystCycle();
+      agentStates.chartanalyst.lastRun = new Date().toISOString();
+      return { data: result };
+    }
     return reply.code(400).send({ error: "Agent not triggerable" });
+  });
+
+  // Live status for chartanalyst
+  app.get("/chartanalyst/status", async () => {
+    return { data: chartAnalystStatus };
   });
 }

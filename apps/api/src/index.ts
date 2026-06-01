@@ -10,6 +10,7 @@ import { marketRouter } from "./routes/market.js";
 import { agentRouter } from "./routes/agents.js";
 import { mcpRouter } from "./routes/mcp.js";
 import { startJournalistAgent, journalistStatus } from "./agents/journalist/index.js";
+import { startChartAnalystAgent } from "./agents/chartanalyst/index.js";
 import { wsManager } from "./ws/manager.js";
 
 const app = Fastify({
@@ -144,6 +145,7 @@ try {
 
   // Kick off background agents
   startJournalistAgent();
+  startChartAnalystAgent();
 } catch (err) {
   app.log.error(err);
   process.exit(1);
