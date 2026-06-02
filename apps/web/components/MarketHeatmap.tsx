@@ -24,7 +24,8 @@ function getColor(change: number): string {
 }
 
 function fmtChange(n: number) {
-  return `${n >= 0 ? "+" : ""}${n.toFixed(2)}%`;
+  const v = n ?? 0;
+  return `${v >= 0 ? "+" : ""}${v.toFixed(2)}%`;
 }
 
 interface TreeNode { name: string; size: number; change: number; price: number }

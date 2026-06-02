@@ -25,6 +25,6 @@ export const wagmiConfig = createConfig({
     [valueChainTestnet.id]: http(),
   },
   ssr: true,
-  // v2 — bump storage key so stale chain-138629 connections are dropped
-  storage: createStorage({ storage: cookieStorage, key: "wagmi-vc-v2" }),
+  // v3 — bump storage key again so any stale chain-138629 or v2 sessions are dropped
+  storage: createStorage({ storage: cookieStorage, key: "wagmi-vc-v3" }),
 });

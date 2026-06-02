@@ -15,9 +15,10 @@ interface HistoryDay {
 }
 
 function fmtM(n: number) {
-  if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(2)}B`;
-  if (Math.abs(n) >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
-  return `$${n.toFixed(0)}`;
+  const v = n ?? 0;
+  if (Math.abs(v) >= 1e9) return `$${(v / 1e9).toFixed(2)}B`;
+  if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(1)}M`;
+  return `$${v.toFixed(0)}`;
 }
 
 function fmtDate(d: string) {
@@ -70,8 +71,8 @@ export default function ETFHistoryChart({ symbol = "BTC" }: { symbol?: "BTC" | "
 
   useEffect(() => { fetchHistory(activeSymbol); }, [activeSymbol, fetchHistory]);
 
-  const totalCumulative = data.length ? data[data.length - 1]?.cum_net_inflow : 0;
-  const last7days = data.slice(-7).reduce((s, d) => s + d.total_net_inflow, 0);
+  const totalCumulative = data.length ? (data[data.length - 1]?.cum_net_inflow ?? 0) : 0;
+  const last7days = data.slice(-7).reduce((s, d) => s + (d.total_net_inflow ?? 0), 0);
 
   return (
     <div className="glass-card p-5">
