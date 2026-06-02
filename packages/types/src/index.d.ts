@@ -125,7 +125,7 @@ export interface WSEvent<T = unknown> {
     payload: T;
     timestamp: string;
 }
-export type AgentName = "journalist" | "strategist" | "broker" | "sentinel";
+export type AgentName = "journalist" | "strategist" | "broker" | "sentinel" | "chartanalyst";
 export type AgentStatus = "idle" | "running" | "error" | "paused";
 export interface AgentState {
     name: AgentName;
