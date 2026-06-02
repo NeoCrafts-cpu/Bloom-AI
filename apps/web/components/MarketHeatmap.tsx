@@ -171,7 +171,7 @@ export default function MarketHeatmap() {
             {gainers.map((c) => (
               <div key={c.symbol} className="flex justify-between items-center py-0.5">
                 <span className="text-[10px] text-bloom-text font-medium">{c.symbol}</span>
-                <span className="text-[10px] text-emerald-400">+{c.change24h.toFixed(2)}%</span>
+                <span className="text-[10px] text-emerald-400">+{(c.change24h ?? 0).toFixed(2)}%</span>
               </div>
             ))}
           </div>
@@ -180,7 +180,7 @@ export default function MarketHeatmap() {
             {losers.map((c) => (
               <div key={c.symbol} className="flex justify-between items-center py-0.5">
                 <span className="text-[10px] text-bloom-text font-medium">{c.symbol}</span>
-                <span className="text-[10px] text-red-400">{c.change24h.toFixed(2)}%</span>
+                <span className="text-[10px] text-red-400">{(c.change24h ?? 0).toFixed(2)}%</span>
               </div>
             ))}
           </div>
