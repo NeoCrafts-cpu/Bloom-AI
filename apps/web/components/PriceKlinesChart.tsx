@@ -17,7 +17,7 @@ interface KlineBar {
   volume: number;
 }
 
-const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "AVAX"] as const;
+const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "AVAX", "ARB", "OP"] as const;
 type ChartSymbol = (typeof SYMBOLS)[number];
 const INTERVALS = ["15m", "1h", "4h", "1d"] as const;
 type ChartInterval = (typeof INTERVALS)[number];
@@ -26,18 +26,54 @@ const INTERVAL_LABEL: Record<ChartInterval, string> = {
   "15m": "15m", "1h": "1H", "4h": "4H", "1d": "1D",
 };
 
-export default function PriceKlinesChart() {
+interface PriceKlinesChartProps {
+  /** When provided, the component uses this symbol and hides the internal symbol picker */
+  controlledSymbol?: string;
+  /** When provided, the component uses this interval and hides the internal interval picker */
+  controlledInterval?: string;
+  /** Called when internal symbol changes (only relevant in uncontrolled mode) */
+  onSymbolChange?: (s: string) => void;
+  /** Height for the chart container in px (default 280) */
+  chartHeight?: number;
+}
+
+export default function PriceKlinesChart({
+  controlledSymbol,
+  controlledInterval,
+  onSymbolChange,
+  chartHeight = 280,
+}: PriceKlinesChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleSeriesRef = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const volSeriesRef    = useRef<ISeriesApi<"Histogram"> | null>(null);
 
-  const [symbol, setSymbol]   = useState<ChartSymbol>("BTC");
-  const [interval, setInterval] = useState<ChartInterval>("1h");
+  const isControlledSymbol   = controlledSymbol !== undefined;
+  const isControlledInterval = controlledInterval !== undefined;
+
+  const [symbol, setSymbol]   = useState<ChartSymbol>(
+    (isControlledSymbol ? controlledSymbol : "BTC") as ChartSymbol
+  );
+  const [interval, setInterval] = useState<ChartInterval>(
+    (isControlledInterval ? controlledInterval : "1h") as ChartInterval
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);
   const [lastCandle, setLastCandle] = useState<KlineBar | null>(null);
   const [showSymbols, setShowSymbols] = useState(false);
+
+  // Sync controlled props → internal state
+  useEffect(() => {
+    if (isControlledSymbol && controlledSymbol !== symbol) {
+      setSymbol(controlledSymbol as ChartSymbol);
+    }
+  }, [controlledSymbol]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isControlledInterval && controlledInterval !== interval) {
+      setInterval(controlledInterval as ChartInterval);
+    }
+  }, [controlledInterval]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Init chart once (v5 API)
   useEffect(() => {
@@ -141,29 +177,38 @@ export default function PriceKlinesChart() {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          {/* Symbol selector */}
-          <div className="relative">
-            <button
-              onClick={() => setShowSymbols((p) => !p)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-bloom-card-hover rounded-xl border border-bloom-border text-sm font-bold text-bloom-text hover:border-bloom-border-hover"
-            >
-              {symbol}
-              <ChevronDown size={12} className={`transition-transform ${showSymbols ? "rotate-180" : ""}`} />
-            </button>
-            {showSymbols && (
-              <div className="absolute top-full mt-1 left-0 bg-bloom-card border border-bloom-border rounded-xl overflow-hidden z-20 shadow-xl">
-                {SYMBOLS.map((s) => (
-                  <button
-                    key={s}
-                    onClick={() => { setSymbol(s); setShowSymbols(false); }}
-                    className={`block w-full px-4 py-1.5 text-sm text-left hover:bg-bloom-card-hover ${s === symbol ? "text-bloom-orange" : "text-bloom-text"}`}
-                  >
-                    {s}/USDC
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          {/* Symbol selector — hidden when controlled externally */}
+          {!isControlledSymbol && (
+            <div className="relative">
+              <button
+                onClick={() => setShowSymbols((p) => !p)}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-bloom-card-hover rounded-xl border border-bloom-border text-sm font-bold text-bloom-text hover:border-bloom-border-hover"
+              >
+                {symbol}
+                <ChevronDown size={12} className={`transition-transform ${showSymbols ? "rotate-180" : ""}`} />
+              </button>
+              {showSymbols && (
+                <div className="absolute top-full mt-1 left-0 bg-bloom-card border border-bloom-border rounded-xl overflow-hidden z-20 shadow-xl">
+                  {SYMBOLS.map((s) => (
+                    <button
+                      key={s}
+                      onClick={() => { setSymbol(s); setShowSymbols(false); onSymbolChange?.(s); }}
+                      className={`block w-full px-4 py-1.5 text-sm text-left hover:bg-bloom-card-hover ${s === symbol ? "text-bloom-orange" : "text-bloom-text"}`}
+                    >
+                      {s}/USDC
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* When controlled, show symbol as label */}
+          {isControlledSymbol && (
+            <span className="text-sm font-bold text-bloom-text px-3 py-1.5 bg-bloom-card-hover rounded-xl border border-bloom-border">
+              {symbol}/USDC
+            </span>
+          )}
 
           {lastCandle && (
             <div className="flex items-center gap-2">
@@ -179,22 +224,24 @@ export default function PriceKlinesChart() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Interval buttons */}
-          <div className="flex gap-1">
-            {INTERVALS.map((ivl) => (
-              <button
-                key={ivl}
-                onClick={() => setInterval(ivl)}
-                className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
-                  interval === ivl
-                    ? "bg-bloom-orange text-black"
-                    : "bg-bloom-card-hover text-bloom-text-muted hover:text-bloom-text"
-                }`}
-              >
-                {INTERVAL_LABEL[ivl]}
-              </button>
-            ))}
-          </div>
+          {/* Interval buttons — hidden when controlled externally */}
+          {!isControlledInterval && (
+            <div className="flex gap-1">
+              {INTERVALS.map((ivl) => (
+                <button
+                  key={ivl}
+                  onClick={() => setInterval(ivl)}
+                  className={`px-2 py-1 rounded-lg text-xs font-semibold transition-all ${
+                    interval === ivl
+                      ? "bg-bloom-orange text-black"
+                      : "bg-bloom-card-hover text-bloom-text-muted hover:text-bloom-text"
+                  }`}
+                >
+                  {INTERVAL_LABEL[ivl as ChartInterval] ?? ivl}
+                </button>
+              ))}
+            </div>
+          )}
           <button
             onClick={() => fetchKlines(symbol, interval)}
             className="p-1.5 rounded-lg hover:bg-bloom-card-hover text-bloom-text-muted"
@@ -208,7 +255,7 @@ export default function PriceKlinesChart() {
 
       {/* Chart container */}
       <div className="relative">
-        <div ref={containerRef} style={{ height: 280 }} />
+        <div ref={containerRef} style={{ height: chartHeight }} />
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/30 rounded-xl">
             <div className="w-5 h-5 border-2 border-bloom-orange border-t-transparent rounded-full animate-spin" />
