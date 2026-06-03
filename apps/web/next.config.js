@@ -10,7 +10,8 @@ const nextConfig = {
     ],
   },
   async rewrites() {
-    const API_BASE = "https://bloom-ai-mqrb.onrender.com";
+    const API_BASE =
+      process.env.NEXT_PUBLIC_API_URL ?? "https://bloom-ai-mqrb.onrender.com";
     return [
       { source: "/api/:path*", destination: `${API_BASE}/api/:path*` },
       { source: "/health",     destination: `${API_BASE}/health` },
