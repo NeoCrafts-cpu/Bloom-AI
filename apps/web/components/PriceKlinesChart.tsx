@@ -151,6 +151,9 @@ export default function PriceKlinesChart({
         volSeriesRef.current.setData(volData);
         chartRef.current?.timeScale().fitContent();
         setLastCandle(bars[bars.length - 1]);
+      } else if (bars.length === 0) {
+        // Empty response — mark as error so the overlay renders
+        setError(true);
       }
     } catch {
       setError(true);
@@ -262,9 +265,15 @@ export default function PriceKlinesChart({
           </div>
         )}
         {error && !loading && (
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-            <p className="text-xs text-bloom-text-muted">Chart data unavailable</p>
-            <p className="text-[10px] text-bloom-text-muted mt-1">Symbol may not be listed on SoDEX testnet</p>
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2">
+            <p className="text-xs text-bloom-text-muted">No chart data available</p>
+            <p className="text-[10px] text-bloom-text-muted opacity-60">SoDEX testnet may not have klines for this symbol/interval</p>
+            <button
+              onClick={() => fetchKlines(symbol, interval)}
+              className="mt-1 px-3 py-1 rounded-full border border-bloom-border text-[10px] text-bloom-text-muted hover:text-bloom-orange hover:border-bloom-orange transition-colors"
+            >
+              Retry
+            </button>
           </div>
         )}
       </div>

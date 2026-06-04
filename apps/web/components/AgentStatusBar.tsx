@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Brain, Layers, Zap, Shield, LineChart } from "lucide-react";
+import { Brain, Layers, Zap, Shield, LineChart, Play } from "lucide-react";
 import type { AgentState } from "@bloom-ai/types";
 
 const AGENT_ICONS: Record<string, React.ElementType> = {
@@ -23,14 +23,29 @@ const AGENT_LABELS: Record<string, string> = {
 
 const MOCK_INITIAL: AgentState[] = [
   { name: "journalist",   status: "running", lastRun: new Date().toISOString(), message: "Polling SoSoValue Terminal API..." },
+  { name: "chartanalyst", status: "running", lastRun: new Date().toISOString(), message: "Monitoring SoDEX klines..." },
   { name: "strategist",   status: "idle",    lastRun: new Date(Date.now() - 180000).toISOString() },
   { name: "broker",       status: "idle" },
   { name: "sentinel",     status: "running", message: "Monitoring all payloads" },
-  { name: "chartanalyst", status: "idle",    lastRun: new Date(Date.now() - 7200000).toISOString() },
 ];
 
 export default function AgentStatusBar() {
   const [agents, setAgents] = useState<AgentState[]>(MOCK_INITIAL);
+  const [triggering, setTriggering] = useState(false);
+
+  const triggerPipeline = async () => {
+    setTriggering(true);
+    try {
+      const res = await fetch("/api/agents/pipeline/trigger", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.data) ? data.data : null;
+        if (list) setAgents(list);
+      }
+    } catch { /* ignore */ } finally {
+      setTriggering(false);
+    }
+  };
 
   // Poll API for live agent state
   useEffect(() => {
@@ -53,7 +68,8 @@ export default function AgentStatusBar() {
   }, []);
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+    <div className="mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
       {agents.map((agent, i) => {
         const Icon = AGENT_ICONS[agent.name] ?? Brain;
         const label = AGENT_LABELS[agent.name] ?? agent.name;
@@ -114,6 +130,19 @@ export default function AgentStatusBar() {
           </motion.div>
         );
       })}
+      </div>
+
+      {/* Run full pipeline button */}
+      <div className="mt-3 flex justify-end">
+        <button
+          onClick={triggerPipeline}
+          disabled={triggering}
+          className="orange-btn flex items-center gap-2 text-xs px-4 py-1.5 disabled:opacity-60"
+        >
+          <Play size={11} className={triggering ? "animate-pulse" : ""} />
+          {triggering ? "Running pipeline..." : "Run Full Pipeline"}
+        </button>
+      </div>
     </div>
   );
 }
