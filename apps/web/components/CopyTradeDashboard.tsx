@@ -107,7 +107,7 @@ export default function CopyTradeDashboard() {
               chainId: TARGET_CHAIN_HEX,
               chainName: "ValueChain Testnet",
               nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
-              rpcUrls: ["https://testnet-rpc.valuechain.xyz"],
+              rpcUrls: ["https://testnet.valuechain.xyz"],
               blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
             }],
           });
@@ -250,7 +250,7 @@ export default function CopyTradeDashboard() {
               chainId: "0x21D45",
               chainName: "ValueChain Testnet",
               nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
-              rpcUrls: ["https://testnet-rpc.valuechain.xyz"],
+              rpcUrls: ["https://testnet.valuechain.xyz"],
               blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
             }],
           });

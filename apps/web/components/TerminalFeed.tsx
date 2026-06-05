@@ -120,11 +120,10 @@ export default function TerminalFeed() {
             setIsDemo(false);
             setLastUpdate(new Date());
           } else if (msg.type === "JOURNALIST_PUBLISHED" && msg.payload) {
-            setNewsletters((prev) => [msg.payload, ...prev.slice(0, 19)]);
-            setIsDemo(false);
-            setLastUpdate(new Date());
-          }
-          }
+              setNewsletters((prev) => [msg.payload, ...prev.slice(0, 19)]);
+              setIsDemo(false);
+              setLastUpdate(new Date());
+            }
         } catch {
           // ignore parse errors
         }

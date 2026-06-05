@@ -8,7 +8,7 @@ export const valueChainTestnet = defineChain({
   name: "ValueChain Testnet",
   nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://testnet-rpc.valuechain.xyz"] },
+    default: { http: ["https://testnet.valuechain.xyz"] },
   },
   blockExplorers: {
     default: {
