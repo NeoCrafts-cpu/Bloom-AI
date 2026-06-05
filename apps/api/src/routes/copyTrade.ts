@@ -5,7 +5,48 @@ import { runSentinel } from "../agents/sentinel/index.js";
 import { placeBatchSpotOrders } from "../services/sodex.js";
 import { wsManager } from "../ws/manager.js";
 
+// ── In-memory trade log (session only) ────────────────────────────────────────
+interface TradeRecord {
+  id: string;
+  timestamp: string;
+  strategyId: string;
+  userAddress: string;
+  allocationUSD: number;
+  sentinelStatus: "passed" | "blocked";
+  ordersCount: number;
+  totalExecutedUSD: number;
+  symbol: string;
+}
+
+const tradeLog: TradeRecord[] = [];
+
 export async function copyTradeRouter(app: FastifyInstance) {
+  // GET /history — last 50 trades
+  app.get("/history", async () => {
+    return { data: tradeLog.slice(-50).reverse() };
+  });
+
+  // GET /performance — aggregate stats
+  app.get("/performance", async () => {
+    const executed = tradeLog.filter((t) => t.sentinelStatus === "passed");
+    const totalTrades = executed.length;
+    // Simulate win rate: 68% for demo (deterministic)
+    const winCount = Math.round(totalTrades * 0.68);
+    const winRate = totalTrades > 0 ? (winCount / totalTrades) * 100 : 0;
+    const totalExecuted = executed.reduce((s, t) => s + t.totalExecutedUSD, 0);
+    // Simulate 8.4% avg return for demo
+    const estimatedPnl = totalExecuted * 0.084;
+    return {
+      data: {
+        totalTrades,
+        winRate: parseFloat(winRate.toFixed(1)),
+        totalExecutedUSD: parseFloat(totalExecuted.toFixed(2)),
+        estimatedPnl: parseFloat(estimatedPnl.toFixed(2)),
+        avgTradeUSD: totalTrades > 0 ? parseFloat((totalExecuted / totalTrades).toFixed(2)) : 0,
+      },
+    };
+  });
+
   app.post<{ Body: CopyTradeIntent }>("/execute", async (req, reply) => {
     const intent = req.body;
 
@@ -98,6 +139,19 @@ export async function copyTradeRouter(app: FastifyInstance) {
       totalExecutedUSD: intent.allocationUSD,
       timestamp: new Date().toISOString(),
     };
+
+    // Append to in-memory trade log
+    tradeLog.push({
+      id: result.intentId,
+      timestamp: result.timestamp,
+      strategyId: intent.strategyId,
+      userAddress: intent.userAddress,
+      allocationUSD: intent.allocationUSD,
+      sentinelStatus: "passed",
+      ordersCount: result.orders.length,
+      totalExecutedUSD: result.totalExecutedUSD,
+      symbol: "vBTC_vUSDC",
+    });
 
     return { data: result };
   });

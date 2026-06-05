@@ -62,13 +62,24 @@ export default function SoSoNewsPanel() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-bloom-text">Live Crypto News</h3>
-            <p className="text-xs text-bloom-text-muted">SoSoValue feed</p>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${
+                isStale
+                  ? "text-amber-400 bg-amber-900/20 border-amber-800/30"
+                  : "text-emerald-400 bg-emerald-900/20 border-emerald-800/30"
+              }`}>
+                {isStale ? "Cached" : "Live"} · SoSoValue
+              </span>
+              {lastUpdate && (
+                <span className="text-[10px] text-bloom-text-muted">
+                  Updated {Math.floor((Date.now() - lastUpdate.getTime()) / 60000)}m ago
+                </span>
+              )}
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isStale && (
-            <span className="text-[10px] text-amber-400 font-medium">● Cached</span>
-          )}
+          {}
           <button
           onClick={fetchNews}
           disabled={loading}

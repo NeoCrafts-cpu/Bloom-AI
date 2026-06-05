@@ -92,11 +92,20 @@ function SignalsPanel({ symbol }: { symbol: string }) {
   const [loading, setLoading] = useState(false);
   const [error, setError]     = useState<string | null>(null);
   const [triggered, setTriggered] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+
+  // Track elapsed time while loading to show cold-start message
+  useEffect(() => {
+    if (!loading) { setElapsed(0); return; }
+    const t = setInterval(() => setElapsed((e) => e + 1), 1000);
+    return () => clearInterval(t);
+  }, [loading]);
 
   const triggerAnalysis = useCallback(async () => {
     setLoading(true);
     setError(null);
     setTriggered(true);
+    setElapsed(0);
     try {
       const res  = await fetch("/api/agents/chartanalyst/trigger", { method: "POST" });
       const json = await res.json();
@@ -134,11 +143,35 @@ function SignalsPanel({ symbol }: { symbol: string }) {
   }
 
   if (loading) {
+    const coldStart = elapsed >= 5;
+    const progress  = Math.min((elapsed / 32) * 100, 95);
     return (
       <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
         <div className="w-8 h-8 border-2 border-bloom-orange border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm text-bloom-text-muted">Chart Analyst running...</p>
-        <p className="text-xs text-bloom-text-muted">Fetching klines from SoDEX · Computing RSI/SMA · Generating commentary</p>
+        <div>
+          <p className="text-sm font-semibold text-bloom-text mb-1">
+            {coldStart ? "Agent waking up…" : "Chart Analyst running…"}
+          </p>
+          <p className="text-xs text-bloom-text-muted">
+            {coldStart
+              ? "Render free-tier cold start — first analysis takes ~30s. Fetching klines + computing RSI/SMA + generating LLM commentary…"
+              : "Fetching klines from SoDEX · Computing RSI/SMA · Generating commentary"}
+          </p>
+        </div>
+        {coldStart && (
+          <div className="w-full max-w-xs">
+            <div className="flex justify-between text-[10px] text-bloom-text-muted mb-1">
+              <span>Progress</span>
+              <span>{elapsed}s</span>
+            </div>
+            <div className="h-1 rounded-full bg-white/10 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-bloom-orange transition-all duration-1000"
+                style={{ width: `${progress}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
     );
   }

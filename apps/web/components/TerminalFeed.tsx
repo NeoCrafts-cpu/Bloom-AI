@@ -80,6 +80,8 @@ export default function TerminalFeed() {
   const [newsletters, setNewsletters] = useState<SmartMoneyNewsletter[]>(MOCK_NEWSLETTERS);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<SmartMoneyNewsletter | null>(null);
+  const [isDemo, setIsDemo] = useState(true);
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   useEffect(() => {
     const fetchNewsletters = async () => {
@@ -88,7 +90,11 @@ export default function TerminalFeed() {
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-          if (list.length > 0) setNewsletters(list);
+          if (list.length > 0) {
+            setNewsletters(list);
+            setIsDemo(false);
+            setLastUpdate(new Date());
+          }
         }
       } catch {
         // Use mock data when API is not running
@@ -111,8 +117,13 @@ export default function TerminalFeed() {
           // Handle initial bulk load from SSE
           if (msg.type === "INITIAL" && Array.isArray(msg.data)) {
             setNewsletters(msg.data);
+            setIsDemo(false);
+            setLastUpdate(new Date());
           } else if (msg.type === "JOURNALIST_PUBLISHED" && msg.payload) {
             setNewsletters((prev) => [msg.payload, ...prev.slice(0, 19)]);
+            setIsDemo(false);
+            setLastUpdate(new Date());
+          }
           }
         } catch {
           // ignore parse errors
@@ -141,6 +152,21 @@ export default function TerminalFeed() {
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
       {/* Feed list */}
       <div className="lg:col-span-2 space-y-4">
+        {/* Feed header */}
+        <div className="flex items-center gap-2 mb-1">
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
+            isDemo
+              ? "text-amber-400 bg-amber-900/20 border-amber-800/30"
+              : "text-emerald-400 bg-emerald-900/20 border-emerald-800/30"
+          }`}>
+            {isDemo ? "DEMO · Mock Data" : "LIVE · Journalist Agent"}
+          </span>
+          {!isDemo && lastUpdate && (
+            <span className="text-[10px] text-bloom-text-muted">
+              Updated {Math.floor((Date.now() - lastUpdate.getTime()) / 60000)}m ago
+            </span>
+          )}
+        </div>
         <AnimatePresence initial={false}>
           {newsletters.map((nl, i) => (
             <motion.div

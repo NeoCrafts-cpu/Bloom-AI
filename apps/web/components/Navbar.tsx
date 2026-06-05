@@ -10,12 +10,13 @@ import WalletButton from "@/components/WalletButton";
 import BloomBackground from "@/components/BloomBackground";
 
 const NAV_LINKS = [
-  { label: "Research",    href: "/research"   },
-  { label: "Terminal",    href: "/terminal"   },
-  { label: "Strategies",  href: "/strategies" },
-  { label: "Copy Trade",  href: "/copy-trade" },
-  { label: "Dashboard",   href: "/dashboard"  },
-  { label: "Docs",        href: "/docs"       },
+  { label: "Research",     href: "/research"     },
+  { label: "Terminal",     href: "/terminal"     },
+  { label: "Strategies",  href: "/strategies"   },
+  { label: "Copy Trade",  href: "/copy-trade"   },
+  { label: "Performance", href: "/performance"  },
+  { label: "Dashboard",   href: "/dashboard"    },
+  { label: "Docs",        href: "/docs"         },
 ];
 
 export default function Navbar() {
