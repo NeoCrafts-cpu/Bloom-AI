@@ -60,4 +60,12 @@ export const config = {
     10,
   ),
   SENTINEL_MAX_LEVERAGE: parseFloat(process.env.SENTINEL_MAX_LEVERAGE ?? "3"),
+  SENTINEL_ATR_THRESHOLD_BPS: parseInt(
+    process.env.SENTINEL_ATR_THRESHOLD_BPS ?? "1500", // 15% volatility proxy
+    10,
+  ),
+  SENTINEL_MAX_CONSECUTIVE_LOSSES: parseInt(
+    process.env.SENTINEL_MAX_CONSECUTIVE_LOSSES ?? "3",
+    10,
+  ),
 } as const;
