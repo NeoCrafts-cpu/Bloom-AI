@@ -5,8 +5,8 @@ import { useEffect, useRef } from "react";
 const SPACING   = 32;   // grid cell size in px
 const BASE_R    = 1.4;  // base dot radius
 const GLOW_R    = 140;  // pixel radius around cursor that lights up
-const BASE_ALPHA = 0.10; // resting dot opacity
-const PEAK_ALPHA = 0.72; // dot opacity at cursor center
+const BASE_ALPHA = 0.14; // resting dot opacity
+const PEAK_ALPHA = 0.78; // dot opacity at cursor center
 
 export default function PixelBackground() {
   const canvasRef = useRef<HTMLCanvasElement>(null);

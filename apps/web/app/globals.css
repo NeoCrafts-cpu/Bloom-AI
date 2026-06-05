@@ -5,7 +5,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
 :root {
-  --color-bg: #0A0703;
+  --color-bg: #0E0804;
   --color-orange: #E8610A;
   --color-orange-light: #F5A020;
   --color-text: #F5F0E8;
@@ -23,7 +23,7 @@ html {
 }
 
 body {
-  background-color: var(--color-bg);
+  background: radial-gradient(ellipse at 55% 35%, #1E0E06 0%, #130804 35%, #0A0502 70%, #060301 100%) fixed;
   color: var(--color-text);
   font-family: 'Inter', system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -106,7 +106,7 @@ body {
 /* Animated gradient border */
 .gradient-border {
   position: relative;
-  background: linear-gradient(#0A0703, #0A0703) padding-box,
+  background: linear-gradient(#0E0804, #0E0804) padding-box,
     linear-gradient(135deg, #E8610A, #F5A020, #E8610A) border-box;
   border: 1px solid transparent;
 }
