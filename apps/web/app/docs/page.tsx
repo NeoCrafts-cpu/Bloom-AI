@@ -61,7 +61,7 @@ export default function DocsPage() {
           <div className="mt-8 px-2">
             <div className="pill-badge-orange text-xs">
               <span className="live-dot" />
-              v2.0 — Wave 2
+              v3.0 — Wave 3
             </div>
           </div>
         </aside>
@@ -180,8 +180,8 @@ function SectionOverview() {
         Bloom AI (AFMEN) is a fully agentic system that bridges real-world financial intelligence with on-chain execution.
         It transforms macro data — ETF fund flows, crypto sentiment, DeFi TVL, order book depth, VC funding rounds — into
         human-readable Smart Money newsletters, technical analysis briefings, on-chain index strategies, and executed
-        copy-trades on SoDEX — all in a single autonomous loop. Zero mock data: every panel shows live API data or an
-        explicit error state.
+        copy-trades on SoDEX — all in a single autonomous loop. No fabricated user-facing metrics: every panel shows
+        live API data, pipeline-generated artifacts, or an explicit empty/stale/unavailable state.
       </DocP>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
@@ -222,8 +222,11 @@ cd apps/web && npx next dev --port 3000`}</DocBlock>
           { path: "/",           desc: "Landing page — hero, stats, agent showcase, integration stack" },
           { path: "/dashboard",  desc: "Live AI newsletter feed with SSE updates + agent status bar" },
           { path: "/terminal",   desc: "Smart Money Terminal — full newsletter reader with strategy links" },
-          { path: "/strategies", desc: "SSI on-chain index cards — live TVL, composition, 1-click copy" },
-          { path: "/copy-trade", desc: "4-step copy-trade wizard — wallet → strategy → Sentinel → SoDEX" },
+          { path: "/research",   desc: "Market intelligence — OHLCV charts, Signals, Confluence, Sentiment" },
+          { path: "/strategies", desc: "Pipeline-generated SSI indices — empty until Run Full Pipeline" },
+          { path: "/copy-trade", desc: "4-step wizard — MetaMask → strategy → Sentinel → SoDEX" },
+          { path: "/performance", desc: "Verified session trades only — no fabricated KPIs" },
+          { path: "/roadmap",    desc: "Product roadmap — phases 1–4" },
           { path: "/docs",       desc: "This documentation page" },
         ].map((p) => (
           <div key={p.path} className="flex items-center gap-3 py-2 border-b border-bloom-border last:border-0">
@@ -243,7 +246,7 @@ function SectionArchitecture() {
       <DocH1>Architecture</DocH1>
       <DocP>
         Bloom AI is a TypeScript monorepo with three workspaces: a Next.js 15 frontend, a Fastify 4 API backend,
-        and a shared types package. The API runs four autonomous agents in the same Node.js process, connected via
+        and a shared types package. The API runs five autonomous agents in the same Node.js process, connected via
         an in-process WebSocket hub that fans out to SSE and WS clients.
       </DocP>
 
@@ -254,11 +257,13 @@ function SectionArchitecture() {
 │   │   └── src/
 │   │       ├── agents/
 │   │       │   ├── journalist/  # SoSoValue polling + LLM newsletter generation
-│   │       │   ├── strategist/  # Narrative → SSI portfolio weights
+│   │       │   ├── chartanalyst/# SoDEX klines → RSI/SMA → TA briefing
+│   │       │   ├── strategist/  # Narrative → SSI portfolio weights (pipeline-generated)
 │   │       │   ├── broker/      # EIP-712 order construction + SoDEX submission
-│   │       │   └── sentinel/    # Deterministic 6-rule circuit breaker
+│   │       │   └── sentinel/    # Deterministic 8-rule circuit breaker
 │   │       ├── lib/
-│   │       │   └── cache.ts     # In-memory TTL cache (stale-while-revalidate)
+│   │       │   ├── cache.ts     # In-memory TTL cache (stale-while-revalidate)
+│   │       │   └── sodexParse.ts# SoDEX ticker/klines field normalization
 │   │       ├── mcp/             # MCP tool registry (7 tools)
 │   │       ├── routes/          # REST API route handlers
 │   │       └── services/
@@ -306,11 +311,12 @@ const result = await cache.get("etf-flows", TTL.ETF_FLOWS, fetchFromSoSoValue);
       <DocH2><Activity size={18} className="text-bloom-orange" />Data Flow</DocH2>
       <div className="space-y-3 mb-6">
         {[
-          { step: "1", title: "Journalist polls every 10 min (TTL cached)", desc: "Fetches ETF flows (5min TTL), news sentiment (2min TTL), and market snapshots from SoDEX first (no rate limit), then CoinGecko as fallback (15s TTL) → builds LLM prompt → publishes SmartMoneyNewsletter via OpenRouter." },
-          { step: "2", title: "Strategist receives newsletter",            desc: "Derives narrative type (risk-on / risk-off / rotation) → maps to SSI index weights with live SoDEX prices → stores SSIIndex in strategyStore." },
-          { step: "3", title: "WS Hub broadcasts",                        desc: "wsManager.broadcast(NEWSLETTER_PUBLISHED | ORDER_FILL | AGENT_STATUS) fans events to all connected WebSocket clients and SSE consumers." },
-          { step: "4", title: "User triggers Copy Trade",                 desc: "Frontend calls POST /api/broker/execute → Broker resolves real accountID + symbolIDs from SoDEX → Sentinel runs 6 checks → EIP-712 signed orders submitted to SoDEX REST." },
-          { step: "5", title: "Order fills stream live",                  desc: "SoDEX returns {clOrdID, status} per asset → Broker converts to OrderFill[] → broadcasts via WS → OrderFeedPanel and CopyTradeDashboard update in real-time." },
+          { step: "0", title: "POST /api/agents/pipeline/trigger",        desc: "Orchestrates the full pipeline: Journalist → Chart Analyst → Strategist → Sentinel preview. Run this from the dashboard before visiting /strategies or /copy-trade." },
+          { step: "1", title: "Journalist polls every 10 min (TTL cached)", desc: "Fetches ETF flows (5min TTL), news sentiment (2min TTL), and market snapshots from SoDEX first, then CoinGecko as fallback (15s TTL) → builds LLM prompt → publishes SmartMoneyNewsletter via OpenRouter (template fallback if key missing)." },
+          { step: "2", title: "Chart Analyst runs on schedule or trigger", desc: "Fetches SoDEX klines (sorted ascending for charts), computes RSI/SMA → publishes TA briefing newsletter. POST /api/agents/chartanalyst/trigger returns the newsletter object directly." },
+          { step: "3", title: "Strategist receives newsletter",            desc: "Derives narrative type (risk-on / risk-off / rotation) → maps to SSI index weights with live SoDEX prices → stores SSIIndex in strategyStore (empty until pipeline runs)." },
+          { step: "4", title: "Sentinel preview + user Copy Trade",         desc: "Pipeline runs sentinel dry-run. User confirms copy-trade → POST /api/broker/execute → Broker resolves accountID + symbolIDs → Sentinel runs 8 checks → EIP-712 signed orders to SoDEX REST." },
+          { step: "5", title: "Order fills + verified performance",       desc: "SoDEX returns fills → tradeStore persists session trades → /performance shows verified stats only (no fabricated win rates or PnL curves)." },
         ].map((s) => (
           <div key={s.step} className="flex gap-4 glass-card p-4">
             <div className="w-7 h-7 rounded-full bg-bloom-orange flex items-center justify-center shrink-0 text-xs font-bold text-bloom-bg">{s.step}</div>
@@ -360,8 +366,8 @@ function SectionAgents() {
           desc: "The Journalist is the entry point of the Bloom AI pipeline. It runs on a configurable interval (default 10 minutes) and performs three tasks: polls the SoSoValue Terminal API for ETF fund flows, AI news sentiment, and market snapshots; constructs a structured LLM prompt with the fetched data; and publishes a SmartMoneyNewsletter via OpenRouter (GPT-4o / Claude).",
           details: [
             { k: "Interval",    v: "600,000ms (10 min) — configurable via env" },
-            { k: "LLM",         v: "OpenRouter API (model: openai/gpt-4o-mini)" },
-            { k: "Data sources", v: "SoSoValue ETF flows, CryptoPanic news, CoinGecko prices" },
+            { k: "LLM",         v: "OpenRouter (~anthropic/claude-sonnet-latest) with template fallback" },
+            { k: "Data sources", v: "SoSoValue ETF flows, news sentiment, SoDEX/CoinGecko prices" },
             { k: "Output",      v: "SmartMoneyNewsletter — stored in newsletterStore, broadcast via WS" },
           ],
           code: `// apps/api/src/agents/journalist/index.ts
@@ -377,13 +383,13 @@ export async function runJournalistCycle(): Promise<void> {
         {
           icon: Layers, name: "The Strategist", role: "Portfolio Generation",
           color: "rgba(245,160,32,0.10)",
-          desc: "The Strategist listens for new newsletters from the Journalist and translates their narrative type into concrete on-chain portfolio weights. It classifies narratives as risk-on, risk-off, or rotation and applies a preset weight map to the key assets mentioned in the newsletter. The resulting SSIIndex object is stored and exposed via the /api/strategies endpoint.",
+          desc: "The Strategist listens for new newsletters from the Journalist and translates their narrative type into concrete portfolio weights. It classifies narratives as risk-on, risk-off, or rotation and applies a preset weight map to key assets with live SoDEX prices. The resulting SSIIndex is stored in strategyStore — the strategies page is empty until the pipeline runs.",
           details: [
-            { k: "Trigger",     v: "Called after each Journalist publish cycle" },
+            { k: "Trigger",     v: "Pipeline trigger or post-Journalist cycle" },
             { k: "Risk-on",     v: "BTC 35% · ETH 30% · SOL 35%" },
             { k: "Risk-off",    v: "BTC 55% · ETH 25% · LINK 20%" },
             { k: "Rotation",    v: "Equal weight across all keyAssets" },
-            { k: "Output",      v: "SSIIndex stored in strategyStore" },
+            { k: "Output",      v: "SSIIndex in strategyStore (no static seed catalog)" },
           ],
           code: `// Narrative → weights mapping
 function deriveWeights(narrative: string, keyAssets: string[]) {
@@ -404,8 +410,8 @@ function deriveWeights(narrative: string, keyAssets: string[]) {
             { k: "Endpoint",    v: "POST /api/broker/execute" },
             { k: "Signing",     v: "EIP-712 typed data (strict field order, DecimalString)" },
             { k: "Chain IDs",   v: "Testnet: 138565 · Mainnet: 286623" },
-            { k: "Fallback",    v: "Mock fills on API error (demo mode)" },
-            { k: "Output",      v: "OrderFill[] — broadcast via WS + returned in response" },
+            { k: "Errors",      v: "Propagates SoDEX API errors — no silent mock fills" },
+            { k: "Output",      v: "OrderFill[] + simulated flag when credentials missing" },
           ],
           code: `// EIP-712 order construction
 const domain = { name: "SoDEX", version: "1", chainId: 138565 };
@@ -421,24 +427,16 @@ const sig = await signTypedData(privateKey, domain, types, order);`,
         {
           icon: Shield, name: "The Sentinel", role: "Deterministic Risk Guard",
           color: "rgba(245,160,32,0.10)",
-          desc: "The Sentinel is a non-AI, fully deterministic circuit breaker. It runs six rules against every copy-trade payload before the Broker submits anything to SoDEX. If any rule fails, the trade is blocked and a SentinelReport is returned with the exact rule that triggered. This design is intentional — risk guardrails must be provably safe and auditable, not LLM-dependent.",
+          desc: "The Sentinel is a non-AI, fully deterministic circuit breaker. It runs eight rules against every copy-trade payload before the Broker submits anything to SoDEX. If any rule fails, the trade is blocked and a SentinelReport is returned with the exact rule that triggered. See the Sentinel section for the full rule list.",
           details: [
-            { k: "Rule 1", v: "Max slippage ≤ 500 bps (5%)" },
-            { k: "Rule 2", v: "Order quantity ≤ 10 BTC (per order cap)" },
-            { k: "Rule 3", v: "Daily exposure ≤ $50,000 USD" },
-            { k: "Rule 4", v: "Wallet address must be non-zero and not blacklisted" },
-            { k: "Rule 5", v: "Strategy ID must exist in strategyStore" },
-            { k: "Rule 6", v: "Allocation percentage 1–100%" },
+            { k: "Rules",       v: "8 deterministic checks — see Sentinel Risk Guard section" },
+            { k: "Endpoint",    v: "POST /api/sentinel/check" },
+            { k: "Pipeline",    v: "Dry-run preview during POST /api/agents/pipeline/trigger" },
+            { k: "Output",      v: "SentinelReport with per-rule pass/fail" },
           ],
-          code: `// apps/api/src/agents/sentinel/index.ts
-const RULES: Rule[] = [
-  { id: "MAX_SLIPPAGE",   check: (i) => i.slippageBps <= 500   },
-  { id: "MAX_QUANTITY",   check: (i) => i.quantity    <= 10    },
-  { id: "DAILY_EXPOSURE", check: (i) => i.usdValue    <= 50000 },
-  { id: "VALID_WALLET",   check: (i) => isValidAddress(i.wallet)},
-  { id: "VALID_STRATEGY", check: (i) => strategyExists(i.strategyId)},
-  { id: "VALID_ALLOC",    check: (i) => i.alloc >= 1 && i.alloc <= 100},
-];`,
+          code: `// apps/api/src/agents/sentinel/index.ts — 8 rules including:
+// MAX_ORDER_USD, MAX_SLIPPAGE_BPS, MAX_DAILY_USD, POSITIVE_ALLOCATION,
+// VALID_USER_ADDRESS, VALID_STRATEGY_ID, ATR_VOLATILITY_FILTER, CIRCUIT_BREAKER`,
         },
         {
           icon: LineChart, name: "The Chart Analyst", role: "Technical Analysis — RSI · SMA · Pattern Recognition",
@@ -449,6 +447,8 @@ const RULES: Rule[] = [
             { k: "LLM",          v: "OpenRouter API (model configurable via OPENROUTER_MODEL)" },
             { k: "Data sources", v: "SoDEX klines endpoint — 96 × 15-min candles per symbol" },
             { k: "Indicators",   v: "RSI-14, SMA-20, SMA-50, price vs. SMA cross signals" },
+            { k: "Trigger",      v: "POST /api/agents/chartanalyst/trigger — returns newsletter in response" },
+            { k: "Fallback",     v: "Deterministic TA template when OpenRouter unavailable" },
             { k: "Output",       v: "SmartMoneyNewsletter (type: chartanalyst) — newsletterStore + WS" },
           ],
           code: `// apps/api/src/agents/chartanalyst/index.ts
@@ -496,7 +496,7 @@ export async function runChartAnalystCycle(): Promise<void> {
 // ── MARKET INTELLIGENCE ───────────────────────────────────────────────────────
 function SectionMarket() {
   const panels = [
-    { icon: LineChart,  title: "OHLCV Candlestick Chart",    lib: "lightweight-charts v5",  desc: "Real-time OHLCV candlestick chart with volume histogram. Powered by TradingView's lightweight-charts v5 (breaking API from v4 — uses addSeries(CandlestickSeries) not addCandlestickSeries()). Symbol toggle: BTC, ETH, SOL, BNB, AVAX. Interval: 15m, 1h, 4h, 1d. Auto-refresh every 60s.", endpoints: ["GET /api/market/klines/:symbol?interval=1h&limit=96"] },
+    { icon: LineChart,  title: "OHLCV Candlestick Chart",    lib: "lightweight-charts v5",  desc: "Real-time OHLCV candlestick chart with volume overlay on the main pane. Klines sorted ascending (SoDEX returns newest-first). Testnet candles may look flat when OHLC values are identical. Symbols: BTC, ETH, SOL, BNB, AVAX. Intervals: 15m, 1h, 4h, 1d.", endpoints: ["GET /api/market/klines/:symbol?interval=1h&limit=96"] },
     { icon: TrendingUp, title: "ETF 30-Day History Chart",   lib: "Recharts BarChart",      desc: "Bar chart showing 30 days of BTC ETF net inflow history with green (inflow) / red (outflow) color coding. Fetches from SoSoValue summary-history endpoint. Includes cumulative inflow overlay and 30-day total.", endpoints: ["GET /api/market/etf-history?symbol=BTC&limit=30"] },
     { icon: BarChart3,  title: "DeFi TVL Leaderboard",       lib: "Custom list UI",         desc: "Top 15 DeFi protocols by Total Value Locked, sourced from DefiLlama. Shows protocol logo, category badge, TVL bar (relative), 24h change, and total TVL header. Refreshes every 3 minutes.", endpoints: ["GET /api/market/defi-tvl"] },
     { icon: Globe,      title: "Live L2 Order Book",         lib: "Recharts AreaChart",     desc: "Connects via native browser WebSocket to the SoDEX gateway. Subscribes to l2book updates for vBTC_vUSDC. Renders cumulative bid/ask depth as a split AreaChart. Ping keepalive every 30s. Falls back to REST poll every 4s if WebSocket is unavailable.", endpoints: ["WSS wss://testnet-gw.sodex.dev/ws/spot", "GET /api/market/sodex/orderbook/:symbol"] },
@@ -543,13 +543,15 @@ function SectionMarket() {
 // ── APIS ──────────────────────────────────────────────────────────────────────
 function SectionAPIs() {
   const endpoints = [
-    { method: "GET",  path: "/health",                              desc: "Server health — journalist status, cycle count, env flags",   res: `{ status, journalist: { status, lastRun, cycleCount, newsletterCount }, env: { openrouter, sosovalue, sodexPrivateKey } }` },
+    { method: "GET",  path: "/health",                              desc: "Server health — live SoSoValue + SoDEX probes, execution mode, agent status",   res: `{ status, integrations: { sodex: { ok }, sosovalue: { ok } }, priceSource, executionMode, agents: AgentState[] }` },
+    { method: "POST", path: "/api/agents/pipeline/trigger",       desc: "Run full pipeline: Journalist → Chart Analyst → Strategist → Sentinel preview", res: `{ "data": { newsletter, strategy, sentinelReport }, "agents": AgentState[] }` },
+    { method: "POST", path: "/api/agents/chartanalyst/trigger",    desc: "Manually trigger Chart Analyst — returns TA newsletter",                      res: `{ "data": SmartMoneyNewsletter, "agent": AgentState }` },
     { method: "GET",  path: "/api/newsletters",                     desc: "List published newsletters (newest first)",                  res: `{ "data": SmartMoneyNewsletter[] }` },
     { method: "GET",  path: "/api/newsletters/stream",              desc: "SSE stream — INITIAL bulk + live JOURNALIST_PUBLISHED events",res: `event: data\ndata: { type, payload }` },
     { method: "POST", path: "/api/newsletters/trigger",             desc: "Manually trigger a Journalist cycle",                       res: `{ "data": SmartMoneyNewsletter }` },
     { method: "GET",  path: "/api/strategies",                      desc: "List all SSI index strategies",                             res: `{ "data": SSIIndex[] }` },
     { method: "GET",  path: "/api/agents",                          desc: "Live status of all five agents (journalist, strategist, broker, sentinel, chartanalyst)", res: `{ "data": AgentState[] }` },
-    { method: "GET",  path: "/api/market/prices",                   desc: "Live prices — SoDEX first, CoinGecko fallback, TTL 15s",    res: `{ "data": MarketSnapshot[], "meta": { cachedAt, isStale } }` },
+    { method: "GET",  path: "/api/market/prices",                   desc: "Live prices — SoDEX first, CoinGecko fallback, TTL 15s",    res: `{ "data": MarketSnapshot[], "meta": { cachedAt, isStale, source: "sodex"|"coingecko"|"seed" } }` },
     { method: "GET",  path: "/api/market/etf-flows",                desc: "ETF net inflow/outflow — SoSoValue, TTL 5min",              res: `{ "data": ETFFlowData[], "meta": { cachedAt, isStale } }` },
     { method: "GET",  path: "/api/market/sentiment",                desc: "AI news sentiment — SoSoValue, TTL 2min, ?limit=",          res: `{ "data": NewsSentiment[], "meta": { cachedAt, isStale } }` },
     { method: "GET",  path: "/api/market/etf-summary",              desc: "Aggregated ETF totals: net inflow, AUM, inflow/outflow count",res: `{ "data": { totalNetInflow, totalAUM, inflowCount, outflowCount, tickers, date }, "meta": { cachedAt, isStale } }` },
@@ -569,8 +571,10 @@ function SectionAPIs() {
     { method: "GET",  path: "/api/market/perps/symbols",            desc: "SoDEX perps symbol list",                                  res: `{ "data": PerpSymbol[] }` },
     { method: "GET",  path: "/api/market/perps/:address/state",     desc: "SoDEX perps account state — balances, open positions, PnL",res: `{ "data": { balance, positions: Position[] } }` },
     { method: "POST", path: "/api/sentinel/check",                  desc: "Run Sentinel risk checks on a copy-trade intent",           res: `{ "data": SentinelReport }` },
-    { method: "POST", path: "/api/broker/execute",                  desc: "Execute a copy-trade: Sentinel + real SoDEX orders",        res: `{ "data": CopyTradeResult }` },
-    { method: "POST", path: "/api/copy-trade",                      desc: "High-level copy-trade intent submission",                   res: `{ "data": CopyTradeResult }` },
+    { method: "POST", path: "/api/broker/execute",                  desc: "Execute copy-trade after user confirmation — Sentinel + SoDEX orders",        res: `{ "data": CopyTradeResult, "simulated"?: boolean }` },
+    { method: "GET",  path: "/api/copy-trade/performance",          desc: "Verified session trade stats from tradeStore",                               res: `{ "data": { totalTrades, totalNotional, ... } }` },
+    { method: "GET",  path: "/api/copy-trade/audit",                desc: "Sentinel blocks + execution audit log",                                      res: `{ "data": AuditEntry[] }` },
+    { method: "POST", path: "/api/copy-trade/execute",            desc: "Deprecated — returns 410 Gone; use POST /api/broker/execute",                 res: `{ "error": "Use POST /api/broker/execute" }` },
     { method: "GET",  path: "/api/mcp/tools",                       desc: "List all registered MCP tools",                            res: `{ "data": MCPTool[] }` },
     { method: "POST", path: "/api/mcp/execute",                     desc: "Execute a named MCP tool with input",                      res: `{ "data": any }` },
     { method: "WS",   path: "ws://[host]:4000/ws",                  desc: "WebSocket hub — ORDER_FILL, JOURNALIST_PUBLISHED, SENTINEL_TRIP", res: `{ type: string, payload: any, timestamp: string }` },
@@ -685,11 +689,22 @@ function SectionStrategies() {
   rebalancedAt: string;          // ISO timestamp
 }`}</DocBlock>
 
-      <DocH2><BarChart3 size={18} className="text-bloom-orange" />Pre-Seeded Strategies</DocH2>
+      <DocH2><BarChart3 size={18} className="text-bloom-orange" />Pipeline-Generated Strategies</DocH2>
+      <DocP>
+        Strategies are created by the Strategist agent when you run <DocCode>POST /api/agents/pipeline/trigger</DocCode> or
+        trigger a Journalist cycle. There is no static seed catalog — if the strategies page is empty, run the pipeline
+        from the dashboard first. Each generated index includes live SoDEX prices in asset weights.
+      </DocP>
+      <InfoCard title="Empty state" icon={Layers}>
+        <DocP>
+          Before the first pipeline run, <DocCode>GET /api/strategies</DocCode> returns an empty array with a message
+          explaining that indices are generated on demand. This is intentional for buildathon compliance — no fabricated TVL.
+        </DocP>
+      </InfoCard>
+
+      <DocH2><Layers size={18} className="text-bloom-orange" />Example Generated Index</DocH2>
       {[
-        { name: "BLOOM-RWA",  id: "ssi-rwa-001",  tvl: "$8.4M",  assets: ["ONDO 35%", "MKR 25%", "USDC 20%", "LINK 20%"], desc: "Real World Asset index. Macro rotation into tokenised T-bills and institutional stablecoins." },
-        { name: "BLOOM-DEFI", id: "ssi-defi-002", tvl: "$5.2M",  assets: ["AAVE 30%", "GMX 25%", "UNI 25%", "COMP 20%"], desc: "High-beta DeFi basket. Tracks top revenue-generating protocols by 30-day fee growth." },
-        { name: "BLOOM-MAG7", id: "ssi-mag7-003", tvl: "$14.7M", assets: ["BTC 35%", "ETH 25%", "SOL 15%", "BNB 10%", "+3"], desc: "Crypto's Magnificent Seven — top 7 assets by ETF inflows and on-chain activity." },
+        { name: "BLOOM-MAG7", id: "ssi-mag7-*", assets: ["BTC 35%", "ETH 25%", "SOL 15%", "BNB 10%", "+3"], desc: "Risk-on narrative — top assets by ETF inflows and on-chain activity. Weights set by Strategist from live newsletter." },
       ].map((s) => (
         <InfoCard key={s.name} title={s.name} icon={Layers}>
           <p className="text-xs text-bloom-text-muted mb-2">{s.desc}</p>
@@ -698,7 +713,6 @@ function SectionStrategies() {
           </div>
           <div className="flex gap-4 text-xs">
             <span className="text-bloom-text-muted">ID: <DocCode>{s.id}</DocCode></span>
-            <span className="text-bloom-text-muted">TVL: <span className="text-bloom-text font-semibold">{s.tvl}</span></span>
           </div>
         </InfoCard>
       ))}
@@ -726,10 +740,10 @@ function SectionCopyTrade() {
       <DocH2><Zap size={18} className="text-bloom-orange" />4-Step Flow</DocH2>
       <div className="space-y-3 mb-6">
         {[
-          { step: "1 — Connect Wallet", desc: "User connects wallet address. In Wave 1 this is simulated; Wave 2 integrates wagmi + MetaMask." },
-          { step: "2 — Configure Trade", desc: "Select strategy, set USD allocation (default $100), configure max slippage in bps (default 50bps = 0.5%)." },
-          { step: "3 — Sentinel Pre-flight", desc: "POST /api/sentinel/check runs 6 deterministic rules. If any fail, trade is blocked with an explanation. Green = Sentinel clears." },
-          { step: "4 — Execute on SoDEX", desc: "POST /api/broker/execute. Broker constructs per-asset EIP-712 orders, signs, submits to SoDEX REST API. Returns OrderFill[] array." },
+          { step: "1 — Connect Wallet", desc: "User connects via wagmi + MetaMask on ValueChain testnet (chainId 138565). Wallet address is required for Sentinel validation." },
+          { step: "2 — Configure Trade", desc: "Select a pipeline-generated strategy, set USD allocation (default $100), configure max slippage in bps (default 50bps = 0.5%)." },
+          { step: "3 — Sentinel Pre-flight", desc: "POST /api/sentinel/check runs 8 deterministic rules. If any fail, trade is blocked with an explanation." },
+          { step: "4 — Execute on SoDEX", desc: "POST /api/broker/execute after explicit user confirmation. Returns OrderFill[] with simulated flag when credentials are missing." },
         ].map((s) => (
           <div key={s.step} className="glass-card p-4">
             <p className="text-sm font-semibold text-bloom-orange mb-1">{s.step}</p>
@@ -972,7 +986,7 @@ function SectionRoadmap() {
       <DocH1>Roadmap</DocH1>
       <DocP>
         Bloom AI is being built across three waves for the SoSoValue Buildathon 2026.
-        Wave 1 is complete and demo-ready. Waves 2 and 3 represent the path to mainnet production.
+        Wave 1 and Wave 2 (buildathon hardening) are complete. Wave 3 covers mainnet and ecosystem expansion.
       </DocP>
 
       {[
@@ -985,44 +999,38 @@ function SectionRoadmap() {
           color: "emerald",
           items: [
             { done: true,  text: "Monorepo scaffolding (Next.js 15 + Fastify 4 + shared types)" },
-            { done: true,  text: "WebGL VideoBackground shader (8 beam cones, dust, vignette)" },
-            { done: true,  text: "Full landing page — hero, stats, agent showcase, integrations, CTA" },
-            { done: true,  text: "Dashboard page with live SSE newsletter feed" },
-            { done: true,  text: "Smart Money Terminal page with newsletter reader" },
-            { done: true,  text: "Strategies page with SSI index cards" },
-            { done: true,  text: "Copy Trade 4-step wizard with SoDEX execution" },
-            { done: true,  text: "Journalist agent — SoSoValue polling + OpenRouter LLM" },
-            { done: true,  text: "Strategist agent — narrative → portfolio weights" },
-            { done: true,  text: "Broker agent — EIP-712 signed SoDEX orders" },
-            { done: true,  text: "Sentinel agent — 6-rule deterministic circuit breaker" },
+            { done: true,  text: "Five-agent pipeline with WebSocket hub + SSE newsletter stream" },
+            { done: true,  text: "Dashboard, Terminal, Research, Strategies, Copy Trade, Performance pages" },
+            { done: true,  text: "Journalist — SoSoValue polling + OpenRouter LLM" },
+            { done: true,  text: "Chart Analyst — SoDEX klines, RSI/SMA, TA briefing" },
+            { done: true,  text: "Strategist — narrative → SSI portfolio weights" },
+            { done: true,  text: "Broker — EIP-712 signed SoDEX orders" },
+            { done: true,  text: "Sentinel — 8-rule deterministic circuit breaker" },
             { done: true,  text: "MCP tool registry (7 tools)" },
-            { done: true,  text: "WebSocket hub + SSE stream" },
-            { done: true,  text: "AgentStatusBar, MarketTicker, OrderFeedPanel components" },
-            { done: true,  text: "Framer Motion animations — page transitions, scroll reveals, hover glows" },
-            { done: true,  text: "Cursor glow spotlight + scroll progress bar" },
+            { done: true,  text: "wagmi wallet connect on ValueChain testnet" },
             { done: true,  text: "Docs page with full API reference and roadmap" },
           ],
         },
         {
           wave: "Wave 2",
-          title: "Live Testnet Integration",
-          subtitle: "In Progress",
-          status: "active" as const,
-          date: "Q3 2026",
-          color: "orange",
+          title: "Buildathon Hardening & Live Integration",
+          subtitle: "Complete",
+          status: "complete" as const,
+          date: "Jun 2026",
+          color: "emerald",
           items: [
-            { done: false, text: "Real wallet connect via wagmi + MetaMask / WalletConnect" },
-            { done: false, text: "Live SoDEX Testnet (chainId 138565) order submission" },
-            { done: false, text: "SSI Protocol smart contract calls — actual on-chain index minting" },
-            { done: false, text: "Real SoSoValue Terminal API key — live ETF flow data" },
-            { done: false, text: "OpenRouter production key — live LLM newsletters" },
-            { done: false, text: "Real nonce management for EIP-712 signing" },
-            { done: false, text: "Portfolio P&L tracking — per-wallet performance dashboard" },
-            { done: false, text: "Strategy subscriber count — on-chain follower metrics" },
+            { done: true,  text: "SoDEX API parsing fix — lastPx, object klines, time normalization" },
+            { done: true,  text: "POST /api/agents/pipeline/trigger — full orchestrated pipeline" },
+            { done: true,  text: "Removed static strategy catalog and fabricated performance metrics" },
+            { done: true,  text: "Live SoSoValue + SoDEX health probes on /health" },
+            { done: true,  text: "Chart Analyst trigger returns newsletter content to Signals tab" },
+            { done: true,  text: "Price meta.source — explicit sodex/coingecko/seed labeling" },
+            { done: true,  text: "AgentStatusBar polls live pipeline progress" },
+            { done: true,  text: "Smoke tests + DEMO.md verification checklist" },
+            { done: true,  text: "Copy-trade audit trail + verified session performance" },
+            { done: false, text: "SSI Protocol on-chain index minting via SoSoValue Index API" },
+            { done: false, text: "Real nonce management for production EIP-712 signing" },
             { done: false, text: "Sentinel daily exposure reset (UTC midnight cron)" },
-            { done: false, text: "Email / push notifications for Journalist publishes" },
-            { done: false, text: "Multi-chain support (Arbitrum, Base via SSI bridge)" },
-            { done: false, text: "Comprehensive integration test suite" },
           ],
         },
         {
@@ -1034,17 +1042,15 @@ function SectionRoadmap() {
           color: "blue",
           items: [
             { done: false, text: "SoDEX Mainnet deployment (chainId 286623) with real assets" },
+            { done: false, text: "Opportunity Discovery Engine — ETF + sentiment + TA scoring" },
+            { done: false, text: "Verified Signal Ledger — evidence → thesis → execution → outcome" },
             { done: false, text: "On-chain strategy marketplace — permissionless index creation" },
-            { done: false, text: "Social layer — follow Bloom AI strategists, copy their indices" },
-            { done: false, text: "BLOOM token — fee sharing for strategy creators" },
-            { done: false, text: "Advanced Journalist modes — sector rotation, macro regime detection" },
+            { done: false, text: "Social layer — follow strategists, copy their indices" },
             { done: false, text: "Perpetual futures support on SoDEX" },
             { done: false, text: "DAO governance for Sentinel rule changes" },
             { done: false, text: "Mobile app (React Native)" },
             { done: false, text: "Institutional API tier — dedicated endpoints, higher rate limits" },
             { done: false, text: "Automated audit trails — all Sentinel decisions on-chain" },
-            { done: false, text: "Cross-chain index rebalancing via LayerZero" },
-            { done: false, text: "zkProof of execution — verifiable order fill proofs" },
           ],
         },
       ].map((wave) => {
@@ -1064,7 +1070,7 @@ function SectionRoadmap() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${statusClasses.badge}`}>
-                    {wave.status === "complete" ? "✓ Complete" : wave.status === "active" ? "⚡ Active" : "◎ Planned"}
+                    {wave.status === "complete" ? "✓ Complete" : "◎ Planned"}
                   </span>
                   <span className="text-xs text-bloom-text-muted">{wave.date}</span>
                 </div>
@@ -1077,7 +1083,7 @@ function SectionRoadmap() {
                       <div key={item.text} className="flex items-start gap-2 text-xs">
                         {item.done ? (
                           <CheckCircle size={13} className="text-emerald-400 shrink-0 mt-0.5" />
-                        ) : wave.status === "active" ? (
+                        ) : wave.status === "complete" ? (
                           <Clock size={13} className="text-bloom-orange shrink-0 mt-0.5" />
                         ) : (
                           <Circle size={13} className="text-bloom-text-muted/40 shrink-0 mt-0.5" />
