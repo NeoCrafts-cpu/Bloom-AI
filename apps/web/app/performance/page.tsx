@@ -3,18 +3,12 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
-  TrendingUp, TrendingDown, Activity, BarChart3,
-  ExternalLink, RefreshCw, Trophy, Zap, Target,
+  TrendingUp, Activity, BarChart3, ExternalLink, RefreshCw, Trophy, Zap, Shield,
 } from "lucide-react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid,
-} from "recharts";
 import Navbar from "@/components/Navbar";
 import { VALUECHAIN_TESTNET } from "@/lib/valuechain";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
-const API  = "";
 
 interface TradeRecord {
   id: string;
@@ -26,53 +20,19 @@ interface TradeRecord {
   ordersCount: number;
   totalExecutedUSD: number;
   symbol: string;
+  simulated?: boolean;
 }
 
 interface PerformanceStats {
   totalTrades: number;
-  winRate: number;
+  blockedTrades: number;
   totalExecutedUSD: number;
-  estimatedPnl: number;
+  verifiedPnlUSD: number;
+  winRate: number | null;
+  maxDrawdownUSD: number;
   avgTradeUSD: number;
-}
-
-// Deterministic signal accuracy log (seeded, not random per render)
-const SIGNAL_LOG = [
-  { time: "May 12, 09:14", signal: "Risk-on: BTC ETF inflows surge",      direction: "LONG",  asset: "BTC",  outcome: "✓", correct: true  },
-  { time: "May 11, 18:32", signal: "DeFi TVL contraction, risk-off",       direction: "SHORT", asset: "ETH",  outcome: "✓", correct: true  },
-  { time: "May 11, 11:05", signal: "Macro uncertainty, hold narrative",   direction: "FLAT",  asset: "BTC",  outcome: "✗", correct: false },
-  { time: "May 10, 14:58", signal: "Institutional accumulation detected",  direction: "LONG",  asset: "SOL",  outcome: "✓", correct: true  },
-  { time: "May 10, 08:22", signal: "VC funding flow into L2s",            direction: "LONG",  asset: "ETH",  outcome: "✓", correct: true  },
-  { time: "May 09, 21:41", signal: "ETF outflows — bearish short-term",   direction: "SHORT", asset: "BTC",  outcome: "✓", correct: true  },
-  { time: "May 09, 13:17", signal: "Stablecoin dominance rising",         direction: "SHORT", asset: "BNB",  outcome: "✗", correct: false },
-  { time: "May 08, 16:03", signal: "RWA narrative gaining momentum",      direction: "LONG",  asset: "ONDO", outcome: "✓", correct: true  },
-] as const;
-
-// Simulated 30-day cumulative return for P&L curve (deterministic seed)
-function buildPnlCurve(trades: TradeRecord[]) {
-  // Seed-based 30-day baseline returns (fixed, realistic-looking)
-  const baseline = [
-    0, 0.4, 0.9, 1.1, 0.8, 1.6, 2.3, 1.9, 2.8, 3.5,
-    3.2, 4.1, 4.8, 5.2, 4.9, 5.7, 6.4, 6.1, 7.0, 7.5,
-    7.2, 8.0, 8.6, 8.3, 9.1, 9.4, 8.8, 9.5, 10.2, 10.8,
-  ];
-
-  const now  = Date.now();
-  const base = now - 29 * 86400000;
-
-  return baseline.map((pct, i) => {
-    const date = new Date(base + i * 86400000);
-    const label = date.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    // Boost by actual trades on that day
-    const dayTrades = trades.filter((t) => {
-      const d = new Date(t.timestamp);
-      return d.getFullYear() === date.getFullYear() &&
-        d.getMonth() === date.getMonth() &&
-        d.getDate() === date.getDate();
-    });
-    const boost = dayTrades.reduce((s, t) => s + t.totalExecutedUSD * 0.001, 0);
-    return { date: label, pnl: parseFloat((pct + boost).toFixed(2)) };
-  });
+  simulatedTrades: number;
+  liveTrades: number;
 }
 
 function timeAgo(iso: string) {
@@ -122,29 +82,24 @@ export default function PerformancePage() {
   const [trades, setTrades]   = useState<TradeRecord[]>([]);
   const [stats, setStats]     = useState<PerformanceStats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [pnlData, setPnlData] = useState<{ date: string; pnl: number }[]>([]);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       const [histRes, perfRes] = await Promise.all([
-        fetch(`${API}/api/copy-trade/history`),
-        fetch(`${API}/api/copy-trade/performance`),
+        fetch("/api/copy-trade/history"),
+        fetch("/api/copy-trade/performance"),
       ]);
       if (histRes.ok) {
         const j = await histRes.json();
-        const list: TradeRecord[] = Array.isArray(j?.data) ? j.data : [];
-        setTrades(list);
-        setPnlData(buildPnlCurve(list));
-      } else {
-        setPnlData(buildPnlCurve([]));
+        setTrades(Array.isArray(j?.data) ? j.data : []);
       }
       if (perfRes.ok) {
         const j = await perfRes.json();
         setStats(j?.data ?? null);
       }
     } catch {
-      setPnlData(buildPnlCurve([]));
+      // keep last data
     } finally {
       setLoading(false);
     }
@@ -156,8 +111,6 @@ export default function PerformancePage() {
     <>
       <Navbar />
       <main className="min-h-screen pt-28 pb-16 px-4 max-w-6xl mx-auto">
-
-        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -170,7 +123,7 @@ export default function PerformancePage() {
             </div>
             <h1 className="text-3xl font-bold text-bloom-text">Strategy Performance</h1>
             <p className="text-bloom-text-muted text-sm mt-1">
-              Simulated returns for BLOOM index strategies · Session trades logged in real-time
+              Verified session trades only — no simulated KPIs or fabricated win rates
             </p>
           </div>
           <button
@@ -182,22 +135,21 @@ export default function PerformancePage() {
           </button>
         </motion.div>
 
-        {/* KPI cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <KpiCard
             label="Total Trades"
             value={stats ? String(stats.totalTrades) : "—"}
-            sub="this session"
+            sub="executed this session"
             icon={Activity}
             color="orange"
             delay={0}
           />
           <KpiCard
-            label="Win Rate"
-            value={stats && stats.totalTrades > 0 ? `${stats.winRate.toFixed(1)}%` : "—"}
-            sub="68% target"
-            icon={TrendingUp}
-            color="green"
+            label="Blocked by Sentinel"
+            value={stats ? String(stats.blockedTrades) : "—"}
+            sub="risk checks failed"
+            icon={Shield}
+            color="blue"
             delay={0.07}
           />
           <KpiCard
@@ -211,131 +163,25 @@ export default function PerformancePage() {
             delay={0.14}
           />
           <KpiCard
-            label="Est. P&L"
-            value={stats && stats.estimatedPnl > 0
-              ? `+$${stats.estimatedPnl.toLocaleString(undefined, { maximumFractionDigits: 2 })}`
-              : stats && stats.totalTrades > 0 ? "$0.00" : "—"}
-            sub="~8.4% avg return"
-            icon={Zap}
+            label="Verified P&L"
+            value={stats && stats.totalTrades > 0
+              ? `${stats.verifiedPnlUSD >= 0 ? "+" : ""}$${stats.verifiedPnlUSD.toFixed(2)}`
+              : "—"}
+            sub={stats?.winRate != null ? `${stats.winRate.toFixed(1)}% win rate (marked trades)` : "requires mark-to-market PnL"}
+            icon={TrendingUp}
             color="green"
             delay={0.21}
           />
           <KpiCard
-            label="Signal Accuracy"
-            value="68%"
-            sub="AI narrative vs 24h price"
-            icon={Target}
-            color="blue"
+            label="Live vs Simulated"
+            value={stats ? `${stats.liveTrades} / ${stats.simulatedTrades}` : "—"}
+            sub="live · simulated fills"
+            icon={Zap}
+            color="green"
             delay={0.28}
           />
         </div>
 
-        {/* P&L Curve */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.28, ease }}
-          className="glass-card p-6 mb-8"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-bold text-bloom-text">BLOOM-MAG7 Simulated Returns</h2>
-              <p className="text-xs text-bloom-text-muted mt-0.5">30-day cumulative P&L · Deterministic simulation</p>
-            </div>
-            <span className="text-emerald-400 text-sm font-bold">+10.8%</span>
-          </div>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={pnlData} margin={{ top: 4, right: 8, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: "#A8A09A", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={false}
-                  interval={4}
-                />
-                <YAxis
-                  tick={{ fill: "#A8A09A", fontSize: 10 }}
-                  tickLine={false}
-                  axisLine={false}
-                  tickFormatter={(v) => `${v}%`}
-                />
-                <Tooltip
-                  contentStyle={{
-                    background: "#130804",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: "8px",
-                    color: "#F5F0E8",
-                    fontSize: "12px",
-                  }}
-                  formatter={(v: number) => [`${v.toFixed(2)}%`, "Cumulative Return"]}
-                  labelStyle={{ color: "#A8A09A" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="pnl"
-                  stroke="#E8610A"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, fill: "#E8610A", stroke: "#F5A020" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </motion.div>
-
-        {/* Signal Accuracy Tracking */}
-        <motion.div
-          initial={{ opacity: 0, y: 24 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.32, ease }}
-          className="glass-card p-6 mb-8"
-        >
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h2 className="text-sm font-bold text-bloom-text">Signal Accuracy Tracking</h2>
-              <p className="text-xs text-bloom-text-muted mt-0.5">Journalist AI narrative vs 24h BTC/asset price direction · 6/8 correct = <span className="text-emerald-400 font-bold">68%</span></p>
-            </div>
-            <span className="text-xs px-2 py-0.5 rounded-full border border-sky-700/40 bg-sky-900/20 text-sky-400 font-mono font-bold">68% accuracy</span>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs">
-              <thead>
-                <tr className="text-bloom-text-muted uppercase tracking-wider border-b border-bloom-border">
-                  <th className="pb-2 text-left font-semibold">Time</th>
-                  <th className="pb-2 text-left font-semibold">Signal</th>
-                  <th className="pb-2 text-center font-semibold">Direction</th>
-                  <th className="pb-2 text-center font-semibold">Asset</th>
-                  <th className="pb-2 text-center font-semibold">Outcome</th>
-                </tr>
-              </thead>
-              <tbody>
-                {SIGNAL_LOG.map((s, i) => (
-                  <tr key={i} className="border-b border-bloom-border/50 hover:bg-white/2 transition-colors">
-                    <td className="py-2.5 text-bloom-text-muted whitespace-nowrap">{s.time}</td>
-                    <td className="py-2.5 text-bloom-text max-w-[220px] truncate">{s.signal}</td>
-                    <td className="py-2.5 text-center">
-                      <span className={`px-1.5 py-0.5 rounded font-mono font-bold ${
-                        s.direction === "LONG"  ? "bg-emerald-900/20 text-emerald-400" :
-                        s.direction === "SHORT" ? "bg-red-900/20 text-red-400" :
-                        "bg-white/5 text-bloom-text-muted"
-                      }`}>{s.direction}</span>
-                    </td>
-                    <td className="py-2.5 text-center font-mono text-bloom-orange">{s.asset}</td>
-                    <td className="py-2.5 text-center">
-                      <span className={`text-base font-bold ${s.correct ? "text-emerald-400" : "text-red-400"}`}>
-                        {s.outcome}
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-
-        {/* Trade History */}
         <motion.div
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
@@ -345,7 +191,7 @@ export default function PerformancePage() {
           <div className="flex items-center justify-between mb-4">
             <div>
               <h2 className="text-sm font-bold text-bloom-text">Session Trade History</h2>
-              <p className="text-xs text-bloom-text-muted mt-0.5">Resets when Render API restarts</p>
+              <p className="text-xs text-bloom-text-muted mt-0.5">Persisted to local trade store — only real executions</p>
             </div>
             {trades.length > 0 && (
               <span className="text-[10px] text-bloom-text-muted">{trades.length} trades</span>
@@ -359,11 +205,10 @@ export default function PerformancePage() {
           ) : trades.length === 0 ? (
             <div className="text-center py-12 text-bloom-text-muted">
               <Activity size={32} className="mx-auto mb-3 text-bloom-border" />
-              <p className="text-sm">No trades this session yet.</p>
+              <p className="text-sm">No executed trades yet.</p>
               <p className="text-xs mt-1">
-                Go to{" "}
-                <a href="/copy-trade" className="text-bloom-orange hover:underline">Copy Trade</a>
-                {" "}to execute your first strategy.
+                Run the agent pipeline, then confirm a copy-trade on{" "}
+                <a href="/copy-trade" className="text-bloom-orange hover:underline">Copy Trade</a>.
               </p>
             </div>
           ) : (
@@ -375,6 +220,7 @@ export default function PerformancePage() {
                     <th className="pb-2 text-left font-semibold">Strategy</th>
                     <th className="pb-2 text-left font-semibold">Symbol</th>
                     <th className="pb-2 text-right font-semibold">Allocation</th>
+                    <th className="pb-2 text-right font-semibold">Mode</th>
                     <th className="pb-2 text-right font-semibold">Status</th>
                     <th className="pb-2 text-right font-semibold">Explorer</th>
                   </tr>
@@ -384,7 +230,7 @@ export default function PerformancePage() {
                     <tr key={t.id} className="border-b border-bloom-border/50 hover:bg-white/2 transition-colors">
                       <td className="py-3 text-bloom-text-muted">{timeAgo(t.timestamp)}</td>
                       <td className="py-3">
-                        <code className="text-bloom-orange font-mono">{t.strategyId.toUpperCase()}</code>
+                        <code className="text-bloom-orange font-mono">{t.strategyId}</code>
                       </td>
                       <td className="py-3 font-mono text-bloom-text-muted">{t.symbol}</td>
                       <td className="py-3 text-right text-bloom-text font-medium">
@@ -392,11 +238,20 @@ export default function PerformancePage() {
                       </td>
                       <td className="py-3 text-right">
                         <span className={`px-2 py-0.5 rounded-full font-semibold ${
+                          t.simulated
+                            ? "bg-amber-900/20 text-amber-400"
+                            : "bg-emerald-900/20 text-emerald-400"
+                        }`}>
+                          {t.simulated ? "SIMULATED" : "LIVE"}
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className={`px-2 py-0.5 rounded-full font-semibold ${
                           t.sentinelStatus === "passed"
                             ? "bg-emerald-900/20 text-emerald-400"
                             : "bg-red-900/20 text-red-400"
                         }`}>
-                          {t.sentinelStatus === "passed" ? "FILLED" : "BLOCKED"}
+                          {t.sentinelStatus === "passed" ? "EXECUTED" : "BLOCKED"}
                         </span>
                       </td>
                       <td className="py-3 text-right">
@@ -418,10 +273,8 @@ export default function PerformancePage() {
           )}
         </motion.div>
 
-        {/* Footer note */}
         <p className="text-center text-[11px] text-bloom-text-muted/50 mt-6">
-          Simulated returns are for demonstration purposes. Trade history is session-scoped and resets on API restart.
-          Strategies execute on SoDEX Testnet.
+          Performance metrics reflect verified session trades only. Win rate and P&L require mark-to-market data on closed positions.
         </p>
       </main>
     </>

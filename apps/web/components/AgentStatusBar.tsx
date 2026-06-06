@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Brain, Layers, Zap, Shield, LineChart, Play, ChevronRight, RefreshCw } from "lucide-react";
 import type { AgentState } from "@bloom-ai/types";
@@ -10,8 +10,8 @@ const PIPELINE_ORDER = ["journalist", "chartanalyst", "strategist", "broker", "s
 const AGENT_CONFIG: Record<string, { icon: React.ElementType; label: string; description: string }> = {
   journalist:   { icon: Brain,     label: "Journalist",    description: "Reads SoSoValue ETF flows & news" },
   chartanalyst: { icon: LineChart,  label: "Chart Analyst", description: "Analyzes SoDEX klines + RSI/SMA" },
-  strategist:   { icon: Layers,    label: "Strategist",    description: "Selects BLOOM index strategy" },
-  broker:       { icon: Zap,       label: "Broker",        description: "Signs & submits orders to SoDEX" },
+  strategist:   { icon: Layers,    label: "Strategist",    description: "Generates SSI index from signals" },
+  broker:       { icon: Zap,       label: "Broker",        description: "Executes on user confirmation" },
   sentinel:     { icon: Shield,    label: "Sentinel",      description: "Risk-checks all payloads live" },
 };
 
@@ -25,25 +25,9 @@ export default function AgentStatusBar() {
   const [agents, setAgents]       = useState<AgentState[]>(IDLE_INITIAL);
   const [triggering, setTriggering] = useState(false);
   const [loadError, setLoadError]   = useState<string | null>(null);
-  const [activeStep, setActiveStep] = useState(-1);
-  const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const animatePipeline = () => {
-    let step = 0;
-    setActiveStep(0);
-    const tick = () => {
-      step++;
-      if (step < PIPELINE_ORDER.length) {
-        setActiveStep(step);
-        stepTimer.current = setTimeout(tick, 650);
-      } else {
-        stepTimer.current = setTimeout(() => setActiveStep(-1), 800);
-      }
-    };
-    stepTimer.current = setTimeout(tick, 650);
-  };
-
-  const fetchAgents = async () => {
+  const fetchAgents = useCallback(async () => {
     try {
       const res = await fetch("/api/agents");
       if (res.ok) {
@@ -52,6 +36,7 @@ export default function AgentStatusBar() {
         if (list) {
           setAgents(list);
           setLoadError(null);
+          return list;
         }
       } else {
         setLoadError("Agent status unavailable");
@@ -59,11 +44,15 @@ export default function AgentStatusBar() {
     } catch {
       setLoadError("Agent status offline");
     }
-  };
+    return null;
+  }, []);
 
   const triggerPipeline = async () => {
     setTriggering(true);
-    animatePipeline();
+    setLoadError(null);
+
+    pollRef.current = setInterval(fetchAgents, 1500);
+
     try {
       const res = await fetch("/api/agents/pipeline/trigger", { method: "POST" });
       if (res.ok) {
@@ -73,14 +62,19 @@ export default function AgentStatusBar() {
           setAgents(list);
           setLoadError(null);
         }
+        if (data?.pipeline?.failed) {
+          setLoadError("Pipeline incomplete — check agent cards for details");
+        }
       } else {
         setLoadError("Pipeline trigger failed");
       }
     } catch {
       setLoadError("Pipeline trigger failed — API offline");
     } finally {
+      if (pollRef.current) clearInterval(pollRef.current);
+      pollRef.current = null;
       setTriggering(false);
-      setTimeout(fetchAgents, 1200);
+      await fetchAgents();
     }
   };
 
@@ -89,12 +83,13 @@ export default function AgentStatusBar() {
     const interval = setInterval(fetchAgents, 10000);
     return () => {
       clearInterval(interval);
-      if (stepTimer.current) clearTimeout(stepTimer.current);
+      if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, []);
+  }, [fetchAgents]);
 
   const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]));
   const errorAgent = agents.find((a) => a.status === "error");
+  const runningAgent = agents.find((a) => a.status === "running");
 
   return (
     <div className="glass-card p-5 mb-6">
@@ -121,14 +116,20 @@ export default function AgentStatusBar() {
             className="orange-btn flex items-center gap-1.5 text-xs px-4 py-1.5 disabled:opacity-60"
           >
             <Play size={10} className={triggering ? "animate-pulse" : ""} />
-            {triggering ? "Running…" : "Run Full Pipeline"}
+            {triggering ? "Running pipeline…" : "Run Full Pipeline"}
           </button>
         </div>
       </div>
 
       {(loadError || errorAgent) && (
-        <div className="mb-4 px-3 py-2 rounded-xl border border-red-800/30 bg-red-900/15 text-xs text-red-300">
+        <div className="mb-4 px-3 py-2 rounded-xl border border-amber-800/30 bg-amber-900/15 text-xs text-amber-300">
           {errorAgent?.message ?? loadError}
+        </div>
+      )}
+
+      {triggering && runningAgent && (
+        <div className="mb-4 px-3 py-2 rounded-xl border border-bloom-border-hover bg-bloom-orange-dim text-xs text-bloom-orange">
+          Active: {AGENT_CONFIG[runningAgent.name]?.label ?? runningAgent.name} — {runningAgent.message}
         </div>
       )}
 
@@ -138,14 +139,13 @@ export default function AgentStatusBar() {
           const config = AGENT_CONFIG[name];
           const Icon   = config.icon;
           const status = agent?.status ?? "idle";
-          const lit    = activeStep >= i || (activeStep === -1 && status === "running");
-          const animating = activeStep === i;
+          const lit    = status === "running" || (status === "idle" && !!agent?.lastRun);
 
           return (
             <div key={name} className="flex items-start shrink-0">
               <motion.div
-                animate={animating ? { scale: [1, 1.07, 1] } : { scale: 1 }}
-                transition={{ duration: 0.4 }}
+                animate={status === "running" ? { scale: [1, 1.04, 1] } : { scale: 1 }}
+                transition={{ duration: 0.8, repeat: status === "running" ? Infinity : 0 }}
                 className={`flex flex-col items-center gap-2 px-3 py-3 rounded-xl border transition-all duration-300 ${
                   lit
                     ? "bg-bloom-orange-dim border-bloom-border-hover"
@@ -154,7 +154,7 @@ export default function AgentStatusBar() {
                 style={{ minWidth: "96px" }}
               >
                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center transition-all duration-300 ${
-                  lit ? "bg-bloom-orange" : "bg-white/5"
+                  status === "running" ? "bg-bloom-orange" : lit ? "bg-bloom-orange/60" : "bg-white/5"
                 }`}>
                   <Icon size={14} className={lit ? "text-bloom-bg" : "text-bloom-text-muted"} />
                 </div>
@@ -188,18 +188,10 @@ export default function AgentStatusBar() {
 
               {i < PIPELINE_ORDER.length - 1 && (
                 <div className="flex items-center self-center px-1 pt-3">
-                  <motion.div
-                    animate={activeStep > i
-                      ? { opacity: [0.5, 1, 0.5] }
-                      : { opacity: 0.25 }
-                    }
-                    transition={{ duration: 0.7, repeat: activeStep > i && activeStep < PIPELINE_ORDER.length ? Infinity : 0 }}
-                  >
-                    <ChevronRight
-                      size={16}
-                      className={activeStep > i ? "text-bloom-orange" : "text-bloom-border"}
-                    />
-                  </motion.div>
+                  <ChevronRight
+                    size={16}
+                    className={status === "running" || lit ? "text-bloom-orange" : "text-bloom-border"}
+                  />
                 </div>
               )}
             </div>

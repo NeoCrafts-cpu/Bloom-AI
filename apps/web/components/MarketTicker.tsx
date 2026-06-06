@@ -23,6 +23,12 @@ export default function MarketTicker() {
         const data = await res.json();
         const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null;
         if (list && list.length > 0) {
+          const source = data?.meta?.source as string | undefined;
+          if (source === "seed") {
+            setTickers([]);
+            setIsStale(true);
+            return;
+          }
           setTickers(
             list.map((m: { symbol: string; price: number; change24h: number }) => ({
               symbol: m.symbol,
@@ -60,8 +66,11 @@ export default function MarketTicker() {
 
   return (
     <div className="glass-card mb-6 overflow-hidden py-3 px-4">
-      {isStale && (
-        <div className="text-[10px] text-amber-400 text-right mb-1">● Cached data</div>
+      {isStale && tickers.length === 0 && (
+        <div className="text-[10px] text-amber-400 text-right mb-1">● Market data unavailable</div>
+      )}
+      {isStale && tickers.length > 0 && (
+        <div className="text-[10px] text-amber-400 text-right mb-1">● Cached · Stale</div>
       )}
       <div className="relative overflow-hidden">
         <div

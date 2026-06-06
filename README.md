@@ -15,10 +15,12 @@ Built for the [SoSoValue 2026 Buildathon](https://sosovalue.com).
 ## Core Flow
 
 ```
-SoSoValue API → Journalist Agent → Strategist Agent → User selects strategy
-    → Wallet EIP-712 sign → Sentinel risk check → Broker → SoDEX testnet
-    → Performance tracking
+SoSoValue API + SoDEX → Journalist → Chart Analyst → Strategist → Sentinel preview
+    → User selects strategy → Wallet EIP-712 sign → Sentinel check → Broker → SoDEX testnet
+    → Performance tracking (verified session trades only)
 ```
+
+Run **Run Full Pipeline** on the dashboard to generate strategies before copy-trading.
 
 ## Target Users
 
@@ -40,9 +42,9 @@ packages/
 |-------|------|
 | **Journalist** | Polls SoSoValue ETF flows, news, sentiment every 10 min |
 | **Chart Analyst** | SoDEX klines + RSI/SMA technical analysis |
-| **Strategist** | Converts newsletter narrative → SSI index weights |
+| **Strategist** | Converts newsletter narrative → SSI index weights (pipeline-generated) |
 | **Sentinel** | 8 deterministic risk rules — blocks bad trades |
-| **Broker** | Multi-asset SoDEX batch orders with EIP-712 signing |
+| **Broker** | Multi-asset SoDEX batch orders on user confirmation only |
 
 ## Quick Start
 
@@ -82,11 +84,12 @@ npm run dev
 
 ## 5-Minute Judge Demo Script
 
-1. **Health check** — Open `/health` → confirm `status: ok`, `executionMode`, journalist fresh
-2. **Terminal** — `/terminal` → live newsletters with SoSoValue ETF data
-3. **Strategies** — `/strategies` → pick BLOOM-MAG7
-4. **Copy Trade** — `/copy-trade` → connect MetaMask → sign → Sentinel → execute
-5. **Performance** — `/performance` → verified trade history + Sentinel audit trail
+1. **Health check** — Open `/health` → confirm `integrations.sodex.ok`, `integrations.sosovalue.ok`
+2. **Run pipeline** — Dashboard → **Run Full Pipeline** → verify strategist generates an SSI index
+3. **Terminal** — `/terminal` → live newsletters with SoSoValue ETF data
+4. **Strategies** — `/strategies` → pick the pipeline-generated strategy
+5. **Copy Trade** — `/copy-trade` → connect MetaMask → sign → Sentinel → confirm execution
+6. **Performance** — `/performance` → verified trade history (no fabricated KPIs)
 
 See [DEMO.md](./DEMO.md) for verification steps.
 
@@ -113,7 +116,7 @@ npm run build
 npm run smoke
 
 # Unit tests
-npm run test
+npm run test:api
 ```
 
 ## Deployment

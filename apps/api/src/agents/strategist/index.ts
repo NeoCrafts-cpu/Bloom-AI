@@ -5,57 +5,7 @@ import { wsManager } from "../../ws/manager.js";
 
 // In-memory strategy store — production: persist to Postgres + SSI contracts
 class StrategyStore {
-  private strategies: SSIIndex[] = [
-    {
-      id: "ssi-rwa-001",
-      name: "BLOOM-RWA",
-      symbol: "BLOOM-RWA.ssi",
-      description:
-        "AI-curated Real World Asset index. Overweights tokenised T-bills, real estate tokens, and institutional-grade stablecoins based on macro rotation signals.",
-      assets: [
-        { symbol: "BTC", address: "0x0000000000000000000000000000000000000001", weight: 0.35, currentPrice: 68420 },
-        { symbol: "ETH", address: "0x0000000000000000000000000000000000000002", weight: 0.25, currentPrice: 3812 },
-        { symbol: "USDC", address: "0x0000000000000000000000000000000000000003", weight: 0.20, currentPrice: 1.00 },
-        { symbol: "LINK", address: "0x0000000000000000000000000000000000000004", weight: 0.20, currentPrice: 17.83 },
-      ],
-      tvl: 8_400_000,
-      dailyFee: 0.0001,
-      createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-      rebalancedAt: new Date(Date.now() - 1800000).toISOString(),
-    },
-    {
-      id: "ssi-defi-002",
-      name: "BLOOM-DEFI",
-      symbol: "BLOOM-DEFI.ssi",
-      description:
-        "High-beta DeFi protocol basket. Tracks top revenue-generating protocols with dynamic weighting based on 30-day protocol fee growth.",
-      assets: [
-        { symbol: "ETH", address: "0x0000000000000000000000000000000000000002", weight: 0.40, currentPrice: 3812 },
-        { symbol: "BTC", address: "0x0000000000000000000000000000000000000001", weight: 0.30, currentPrice: 68420 },
-        { symbol: "SOL", address: "0x0000000000000000000000000000000000000005", weight: 0.30, currentPrice: 182.4 },
-      ],
-      tvl: 5_200_000,
-      dailyFee: 0.0001,
-      createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-      rebalancedAt: new Date(Date.now() - 7200000).toISOString(),
-    },
-    {
-      id: "ssi-mag7-003",
-      name: "BLOOM-MAG7",
-      symbol: "BLOOM-MAG7.ssi",
-      description:
-        "Crypto's magnificent seven — top 7 assets by institutional adoption and ETF inflows. Auto-rebalances when ETF flow dominance shifts.",
-      assets: [
-        { symbol: "BTC", address: "0x0000000000000000000000000000000000000001", weight: 0.35, currentPrice: 68420 },
-        { symbol: "ETH", address: "0x0000000000000000000000000000000000000002", weight: 0.25, currentPrice: 3812 },
-        { symbol: "SOL", address: "0x0000000000000000000000000000000000000005", weight: 0.40, currentPrice: 182.4 },
-      ],
-      tvl: 14_700_000,
-      dailyFee: 0.0001,
-      createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
-      rebalancedAt: new Date(Date.now() - 3600000).toISOString(),
-    },
-  ];
+  private strategies: SSIIndex[] = [];
 
   getAll(): SSIIndex[] { return this.strategies; }
   getById(id: string): SSIIndex | undefined { return this.strategies.find(s => s.id === id); }
@@ -72,6 +22,14 @@ class StrategyStore {
 
 export const strategyStore = new StrategyStore();
 
+export let strategistStatus: {
+  status: "running" | "idle" | "error";
+  lastRun: string | null;
+  lastError: string | null;
+  lastStrategyId: string | null;
+  cycleCount: number;
+} = { status: "idle", lastRun: null, lastError: null, lastStrategyId: null, cycleCount: 0 };
+
 /**
  * Strategist Agent — portfolio generation and SSI index minting.
  *
@@ -82,6 +40,8 @@ export const strategyStore = new StrategyStore();
 export async function runStrategistCycle(
   newsletter: SmartMoneyNewsletter,
 ): Promise<SSIIndex | null> {
+  strategistStatus.status = "running";
+  strategistStatus.lastError = null;
   try {
     console.log("[Strategist] Generating strategy for:", newsletter.narrative);
 
@@ -124,9 +84,16 @@ export async function runStrategistCycle(
     });
 
     console.log(`[Strategist] Created strategy: ${newStrategy.symbol}`);
+    strategistStatus.status = "idle";
+    strategistStatus.lastRun = new Date().toISOString();
+    strategistStatus.lastStrategyId = newStrategy.id;
+    strategistStatus.cycleCount++;
     return newStrategy;
   } catch (err) {
-    console.error("[Strategist] Cycle failed:", err);
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[Strategist] Cycle failed:", msg);
+    strategistStatus.status = "error";
+    strategistStatus.lastError = msg;
     return null;
   }
 }

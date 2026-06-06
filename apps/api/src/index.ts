@@ -56,17 +56,33 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
   "/api/broker/execute",
   async (req, reply) => {
     const intent = req.body;
+    const { config } = await import("./config.js");
     const { runSentinel } = await import("./agents/sentinel/index.js");
     const { executeCopyTrade } = await import("./agents/broker/index.js");
+    const { tradeStore } = await import("./store/tradeStore.js");
 
     const sentinel = runSentinel(intent);
     if (!sentinel.passed) {
+      tradeStore.recordSentinelBlock(sentinel, {
+        strategyId: intent.strategyId,
+        userAddress: intent.userAddress,
+      });
       wsManager.broadcast({ type: "SENTINEL_TRIP", payload: sentinel, timestamp: new Date().toISOString() });
       return reply.code(422).send({ data: { sentinelStatus: "blocked", sentinelReport: sentinel } });
     }
 
-    const result = await executeCopyTrade(intent);
-    return { data: result };
+    try {
+      const result = await executeCopyTrade(intent);
+      const simulated = !config.SODEX_API_PRIVATE_KEY;
+      tradeStore.recordExecution(intent, result, simulated);
+      return { data: { ...result, simulated } };
+    } catch (err) {
+      tradeStore.recordError(
+        { strategyId: intent.strategyId, userAddress: intent.userAddress },
+        (err as Error).message,
+      );
+      return reply.code(500).send({ error: (err as Error).message });
+    }
   },
 );
 

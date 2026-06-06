@@ -1,6 +1,38 @@
 import type { CopyTradeIntent, SentinelReport, SentinelCheck } from "@bloom-ai/types";
 import { config } from "../../config.js";
 
+export let sentinelStatus: {
+  status: "running" | "idle" | "error";
+  lastRun: string | null;
+  lastError: string | null;
+  lastPreview: SentinelReport | null;
+  cycleCount: number;
+} = { status: "idle", lastRun: null, lastError: null, lastPreview: null, cycleCount: 0 };
+
+/** Dry-run risk preview for pipeline — uses a conservative default intent */
+export function runSentinelPreview(strategyId: string): SentinelReport {
+  sentinelStatus.status = "running";
+  try {
+    const report = runSentinel({
+      strategyId,
+      newsletterId: "pipeline-preview",
+      userAddress: "0x0000000000000000000000000000000000000001",
+      allocationUSD: 100,
+      maxSlippageBps: 50,
+    });
+    sentinelStatus.status = "idle";
+    sentinelStatus.lastRun = new Date().toISOString();
+    sentinelStatus.lastPreview = report;
+    sentinelStatus.cycleCount++;
+    return report;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    sentinelStatus.status = "error";
+    sentinelStatus.lastError = msg;
+    throw err;
+  }
+}
+
 /** Daily spend tracker — in production backed by Redis */
 const dailySpend: Map<string, { amount: number; resetAt: number }> = new Map();
 

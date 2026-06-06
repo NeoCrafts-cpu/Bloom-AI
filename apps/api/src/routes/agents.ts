@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { AgentState } from "@bloom-ai/types";
+import type { AgentState, SSIIndex, SmartMoneyNewsletter, SentinelReport } from "@bloom-ai/types";
 import {
   startJournalistAgent,
   stopJournalistAgent,
@@ -12,6 +12,16 @@ import {
   runChartAnalystCycle,
   chartAnalystStatus,
 } from "../agents/chartanalyst/index.js";
+import {
+  runStrategistCycle,
+  strategistStatus,
+} from "../agents/strategist/index.js";
+import {
+  runSentinelPreview,
+  sentinelStatus,
+} from "../agents/sentinel/index.js";
+import { brokerStatus } from "../agents/broker/index.js";
+import { newsletterStore } from "../store/newsletter.js";
 
 function mapJournalistState(): AgentState {
   const status =
@@ -41,12 +51,15 @@ function mapChartAnalystState(): AgentState {
       : chartAnalystStatus.status === "running"
         ? "running"
         : "idle";
+  const warning = chartAnalystStatus.lastError?.includes("deterministic")
+    ? chartAnalystStatus.lastError
+    : null;
   return {
     name: "chartanalyst",
     status,
     lastRun: chartAnalystStatus.lastRun ?? undefined,
     message:
-      chartAnalystStatus.lastError ??
+      (status === "error" ? chartAnalystStatus.lastError : warning) ??
       (status === "running"
         ? "Analyzing SoDEX klines..."
         : chartAnalystStatus.lastRun
@@ -55,17 +68,82 @@ function mapChartAnalystState(): AgentState {
   };
 }
 
+function mapStrategistState(): AgentState {
+  const status =
+    strategistStatus.status === "error"
+      ? "error"
+      : strategistStatus.status === "running"
+        ? "running"
+        : "idle";
+  return {
+    name: "strategist",
+    status,
+    lastRun: strategistStatus.lastRun ?? undefined,
+    message:
+      strategistStatus.lastError ??
+      (status === "running"
+        ? "Generating SSI index from newsletter..."
+        : strategistStatus.lastStrategyId
+          ? `Signal generated — ${strategistStatus.lastStrategyId}`
+          : "Idle until pipeline trigger"),
+  };
+}
+
+function mapBrokerState(): AgentState {
+  const status =
+    brokerStatus.status === "error"
+      ? "error"
+      : brokerStatus.status === "running"
+        ? "running"
+        : "idle";
+  return {
+    name: "broker",
+    status,
+    lastRun: brokerStatus.lastRun ?? undefined,
+    message:
+      brokerStatus.lastError ??
+      brokerStatus.lastMessage,
+  };
+}
+
+function mapSentinelState(preview?: SentinelReport | null): AgentState {
+  const status =
+    sentinelStatus.status === "error"
+      ? "error"
+      : sentinelStatus.status === "running"
+        ? "running"
+        : "idle";
+  const report = preview ?? sentinelStatus.lastPreview;
+  return {
+    name: "sentinel",
+    status,
+    lastRun: sentinelStatus.lastRun ?? undefined,
+    message:
+      sentinelStatus.lastError ??
+      (status === "running"
+        ? "Running risk checks..."
+        : report
+          ? report.passed
+            ? `${report.checks.length} checks passed — ready for copy-trade`
+            : "Risk preview failed — review limits"
+          : "Passive — checks on copy-trade confirmation"),
+  };
+}
+
 const agentStates: Record<string, AgentState> = {
   journalist: mapJournalistState(),
   chartanalyst: mapChartAnalystState(),
-  strategist: { name: "strategist", status: "idle", message: "Idle until pipeline trigger" },
-  broker: { name: "broker", status: "idle", message: "Idle — executes on copy-trade" },
-  sentinel: { name: "sentinel", status: "idle", message: "Passive — checks on copy-trade" },
+  strategist: mapStrategistState(),
+  broker: mapBrokerState(),
+  sentinel: mapSentinelState(),
 };
 
 function syncLiveAgentStates() {
   agentStates.journalist = mapJournalistState();
   agentStates.chartanalyst = mapChartAnalystState();
+  agentStates.strategist = mapStrategistState();
+  agentStates.broker = mapBrokerState();
+  agentStates.sentinel = mapSentinelState();
 }
 
 export async function agentRouter(app: FastifyInstance) {
@@ -141,19 +219,19 @@ export async function agentRouter(app: FastifyInstance) {
     return { data: chartAnalystStatus };
   });
 
-  // Full pipeline trigger — chains all 5 agents deterministically
+  // Full pipeline: Journalist → Chart Analyst → Strategist → Sentinel preview → Broker ready
   app.post("/pipeline/trigger", async () => {
     const now = new Date().toISOString();
-    agentStates.journalist = { name: "journalist", status: "running", lastRun: now, message: "Running analysis cycle..." };
-    agentStates.chartanalyst = { name: "chartanalyst", status: "running", lastRun: now, message: "Analyzing klines..." };
-    agentStates.strategist = { name: "strategist", status: "running", lastRun: now, message: "Generating signals..." };
-    agentStates.broker = { name: "broker", status: "running", lastRun: now, message: "Preparing orders..." };
-    agentStates.sentinel = { name: "sentinel", status: "running", lastRun: now, message: "Running risk checks..." };
-
     let pipelineFailed = false;
+    let pipelineNewsletter: SmartMoneyNewsletter | null = null;
+    let pipelineStrategy: SSIIndex | null = null;
+    let sentinelDryRun: SentinelReport | null = null;
 
+    agentStates.journalist = { name: "journalist", status: "running", lastRun: now, message: "Running analysis cycle..." };
     try {
       await runJournalistCycle();
+      agentStates.journalist = mapJournalistState();
+      if (journalistStatus.status === "error") pipelineFailed = true;
     } catch (err) {
       pipelineFailed = true;
       agentStates.journalist = {
@@ -164,13 +242,11 @@ export async function agentRouter(app: FastifyInstance) {
       };
     }
 
-    if (!pipelineFailed) {
-      agentStates.journalist = mapJournalistState();
-    }
-
+    agentStates.chartanalyst = { name: "chartanalyst", status: "running", lastRun: now, message: "Analyzing klines..." };
     try {
       await runChartAnalystCycle();
       agentStates.chartanalyst = mapChartAnalystState();
+      if (chartAnalystStatus.status === "error") pipelineFailed = true;
     } catch (err) {
       pipelineFailed = true;
       agentStates.chartanalyst = {
@@ -181,46 +257,49 @@ export async function agentRouter(app: FastifyInstance) {
       };
     }
 
-    if (pipelineFailed || chartAnalystStatus.status === "error" || journalistStatus.status === "error") {
-      agentStates.strategist = {
-        name: "strategist",
-        status: "idle",
-        lastRun: now,
-        message: "Skipped — upstream agent error",
-      };
-      agentStates.broker = {
-        name: "broker",
-        status: "idle",
-        lastRun: now,
-        message: "No orders — pipeline incomplete",
-      };
-      agentStates.sentinel = {
-        name: "sentinel",
-        status: "idle",
-        lastRun: now,
-        message: "Monitoring only",
-      };
-    } else {
-      agentStates.strategist = {
-        name: "strategist",
-        status: "idle",
-        lastRun: now,
-        message: "Signal generated",
-      };
-      agentStates.broker = {
-        name: "broker",
-        status: "idle",
-        lastRun: now,
-        message: "Demo mode — no live execution",
-      };
-      agentStates.sentinel = {
-        name: "sentinel",
-        status: "idle",
-        lastRun: now,
-        message: "Pipeline checks passed",
+    if (pipelineFailed) {
+      agentStates.strategist = { name: "strategist", status: "idle", lastRun: now, message: "Skipped — upstream agent error" };
+      agentStates.sentinel = { name: "sentinel", status: "idle", lastRun: now, message: "Skipped — pipeline incomplete" };
+      brokerStatus.lastMessage = "Awaiting successful pipeline run";
+      agentStates.broker = mapBrokerState();
+      return {
+        data: Object.values(agentStates),
+        pipeline: { newsletter: null, strategy: null, sentinelDryRun: null, failed: true },
       };
     }
 
-    return { data: Object.values(agentStates) };
+    pipelineNewsletter = newsletterStore.getLatest() ?? null;
+
+    agentStates.strategist = { name: "strategist", status: "running", lastRun: now, message: "Generating SSI index..." };
+    if (!pipelineNewsletter) {
+      agentStates.strategist = { name: "strategist", status: "error", lastRun: now, message: "No newsletter available from Journalist" };
+    } else {
+      pipelineStrategy = await runStrategistCycle(pipelineNewsletter);
+      agentStates.strategist = mapStrategistState();
+      if (!pipelineStrategy) pipelineFailed = true;
+    }
+
+    if (pipelineStrategy) {
+      agentStates.sentinel = { name: "sentinel", status: "running", lastRun: now, message: "Running risk preview..." };
+      sentinelDryRun = runSentinelPreview(pipelineStrategy.id);
+      agentStates.sentinel = mapSentinelState(sentinelDryRun);
+    } else {
+      agentStates.sentinel = { name: "sentinel", status: "idle", lastRun: now, message: "Skipped — no strategy generated" };
+    }
+
+    brokerStatus.lastMessage = pipelineStrategy
+      ? "Ready for confirmation — execute via Copy Trade"
+      : "Awaiting strategy signal from pipeline";
+    agentStates.broker = mapBrokerState();
+
+    return {
+      data: Object.values(agentStates),
+      pipeline: {
+        newsletter: pipelineNewsletter,
+        strategy: pipelineStrategy,
+        sentinelDryRun,
+        failed: pipelineFailed,
+      },
+    };
   });
 }

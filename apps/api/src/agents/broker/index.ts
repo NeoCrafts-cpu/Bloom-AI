@@ -7,54 +7,21 @@ import {
   getOrderHistory,
 } from "../../services/sodex.js";
 import { getMarketSnapshots } from "../../services/sosovalue.js";
+import { strategyStore } from "../strategist/index.js";
 import { wsManager } from "../../ws/manager.js";
 
-// SSI strategy definitions — assets map to SoDEX vToken symbols
-const STRATEGY_INDEX_MAP: Record<string, SSIIndex> = {
-  "ssi-rwa-001": {
-    id: "ssi-rwa-001",
-    name: "BLOOM-RWA",
-    symbol: "BLOOM-RWA.ssi",
-    description: "Real World Asset index — BTC, ETH, LINK exposure on-chain",
-    assets: [
-      { symbol: "BTC",  address: "0x0000000000000000000000000000000000000001", weight: 0.40, currentPrice: 0 },
-      { symbol: "ETH",  address: "0x0000000000000000000000000000000000000002", weight: 0.35, currentPrice: 0 },
-      { symbol: "LINK", address: "0x0000000000000000000000000000000000000003", weight: 0.25, currentPrice: 0 },
-    ],
-    tvl: 0,
-    dailyFee: 0.0001,
-    createdAt: new Date().toISOString(),
-    rebalancedAt: new Date().toISOString(),
-  },
-  "ssi-defi-002": {
-    id: "ssi-defi-002",
-    name: "BLOOM-DEFI",
-    symbol: "BLOOM-DEFI.ssi",
-    description: "DeFi protocol basket — ETH-heavy with BTC hedge",
-    assets: [
-      { symbol: "ETH", address: "0x0000000000000000000000000000000000000002", weight: 0.55, currentPrice: 0 },
-      { symbol: "BTC", address: "0x0000000000000000000000000000000000000001", weight: 0.45, currentPrice: 0 },
-    ],
-    tvl: 0,
-    dailyFee: 0.0001,
-    createdAt: new Date().toISOString(),
-    rebalancedAt: new Date().toISOString(),
-  },
-  "ssi-mag7-003": {
-    id: "ssi-mag7-003",
-    name: "BLOOM-MAG7",
-    symbol: "BLOOM-MAG7.ssi",
-    description: "Crypto Magnificent 7 — BTC, ETH, SOL diversified",
-    assets: [
-      { symbol: "BTC", address: "0x0000000000000000000000000000000000000001", weight: 0.35, currentPrice: 0 },
-      { symbol: "ETH", address: "0x0000000000000000000000000000000000000002", weight: 0.25, currentPrice: 0 },
-      { symbol: "SOL", address: "0x0000000000000000000000000000000000000003", weight: 0.40, currentPrice: 0 },
-    ],
-    tvl: 0,
-    dailyFee: 0.0001,
-    createdAt: new Date().toISOString(),
-    rebalancedAt: new Date().toISOString(),
-  },
+export let brokerStatus: {
+  status: "running" | "idle" | "error";
+  lastRun: string | null;
+  lastError: string | null;
+  lastMessage: string;
+  cycleCount: number;
+} = {
+  status: "idle",
+  lastRun: null,
+  lastError: null,
+  lastMessage: "Awaiting user confirmation in Copy Trade",
+  cycleCount: 0,
 };
 
 /**
@@ -67,9 +34,11 @@ const STRATEGY_INDEX_MAP: Record<string, SSIIndex> = {
  * 5. Broadcasts order events via WebSocket
  */
 export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTradeResult> {
+  brokerStatus.status = "running";
+  brokerStatus.lastError = null;
   const intentId = uuid();
 
-  // ── Resolve real accountID from SoDEX ─────────────────────────────────────
+  try {
   let accountID = 0;
   if (intent.userAddress && intent.userAddress !== "0x0000000000000000000000000000000000000000") {
     const accountState = await getAccountState(intent.userAddress);
@@ -94,11 +63,16 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     }
   }
 
-  // ── Resolve SSI index ─────────────────────────────────────────────────────
-  const indexTemplate = STRATEGY_INDEX_MAP[intent.strategyId] ?? STRATEGY_INDEX_MAP["ssi-mag7-003"];
+  // ── Resolve SSI index from pipeline-generated store ───────────────────────
+  const stored = strategyStore.getById(intent.strategyId);
+  if (!stored) {
+    brokerStatus.status = "error";
+    brokerStatus.lastError = `Strategy ${intent.strategyId} not found — run pipeline first`;
+    throw new Error(brokerStatus.lastError);
+  }
   const index: SSIIndex = {
-    ...indexTemplate,
-    assets: indexTemplate.assets.map((a) => ({
+    ...stored,
+    assets: stored.assets.map((a) => ({
       ...a,
       currentPrice: priceMap[a.symbol] ?? a.currentPrice,
     })),
@@ -186,15 +160,26 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     timestamp: new Date().toISOString(),
   };
 
+  brokerStatus.status = "idle";
+  brokerStatus.lastRun = new Date().toISOString();
+  brokerStatus.lastMessage = `Executed ${fills.length} orders for $${totalExecuted.toFixed(2)} — Account #${accountID}`;
+  brokerStatus.cycleCount++;
+
   wsManager.broadcast({
     type: "AGENT_STATUS",
     payload: {
       name: "broker",
       status: "idle",
-      message: `Executed ${fills.length} orders for $${totalExecuted.toFixed(2)} — Account #${accountID}`,
+      message: brokerStatus.lastMessage,
     },
     timestamp: new Date().toISOString(),
   });
 
   return result;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    brokerStatus.status = "error";
+    brokerStatus.lastError = msg;
+    throw err;
+  }
 }
