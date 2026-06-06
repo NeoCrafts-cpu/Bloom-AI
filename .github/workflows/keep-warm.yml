@@ -1,0 +1,19 @@
+name: Keep API Warm
+
+on:
+  schedule:
+    # Ping every 5 minutes during buildathon judging windows (UTC)
+    - cron: "*/5 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Bloom AI health endpoint
+        run: |
+          API_URL="${{ vars.BLOOM_API_URL || 'https://bloom-ai-mqrb.onrender.com' }}"
+          echo "Pinging $API_URL/health"
+          curl -sf --max-time 30 "$API_URL/health" | head -c 2000
+          echo ""
+          echo "Keep-warm ping succeeded"
