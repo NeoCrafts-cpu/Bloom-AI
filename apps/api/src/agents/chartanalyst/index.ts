@@ -87,44 +87,58 @@ export async function runChartAnalystCycle(): Promise<SmartMoneyNewsletter | nul
     ].filter(Boolean).join("\n");
 
     let analysis: { title: string; body: string; keyAssets: string[] };
+    let llmWarning: string | null = null;
 
     if (config.OPENROUTER_API_KEY) {
-      const prompt = `You are Bloom AI's Chart Analyst. Analyze this 24h market data and produce a concise technical analysis briefing:
+      try {
+        const prompt = `You are Bloom AI's Chart Analyst. Analyze this 24h market data and produce a concise technical analysis briefing:
 
 ${contextLines}
 
 Write a 3-5 sentence technical analysis. Include: trend direction, key support/resistance levels based on the 24h range, RSI signals (overbought >70, oversold <30), and a brief outlook. Be specific with price levels. Format as plain text, no markdown, professional tone.`;
 
-      const llmRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: config.OPENROUTER_MODEL,
-          messages: [{ role: "user", content: prompt }],
-          max_tokens: 400,
-          temperature: 0.3,
-        }),
-        signal: AbortSignal.timeout(20000),
-      });
+        const llmRes = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${config.OPENROUTER_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: config.OPENROUTER_MODEL,
+            messages: [{ role: "user", content: prompt }],
+            max_tokens: 400,
+            temperature: 0.3,
+          }),
+          signal: AbortSignal.timeout(20000),
+        });
 
-      if (!llmRes.ok) throw new Error(`OpenRouter ${llmRes.status}`);
-      const llmJson = (await llmRes.json()) as {
-        choices: { message: { content: string } }[];
-      };
-      const text = llmJson.choices?.[0]?.message?.content?.trim() ?? "";
+        if (!llmRes.ok) throw new Error(`OpenRouter ${llmRes.status}`);
+        const llmJson = (await llmRes.json()) as {
+          choices: { message: { content: string } }[];
+        };
+        const text = llmJson.choices?.[0]?.message?.content?.trim() ?? "";
 
-      const btcPct = btcM?.pctChange ?? 0;
-      const titleSentiment = btcPct >= 2 ? "Bullish" : btcPct <= -2 ? "Bearish" : "Neutral";
-      analysis = {
-        title: `Chart Analysis: ${titleSentiment} Setup — BTC ${btcM ? (btcM.pctChange >= 0 ? "+" : "") + btcM.pctChange.toFixed(1) + "%" : ""}`,
-        body: text || fallbackBody(btcM, ethM, solM, totalEtfInflow),
-        keyAssets: ["BTC", "ETH", "SOL"].filter(
-          (s, i) => [btcM, ethM, solM][i] !== null,
-        ),
-      };
+        const btcPct = btcM?.pctChange ?? 0;
+        const titleSentiment = btcPct >= 2 ? "Bullish" : btcPct <= -2 ? "Bearish" : "Neutral";
+        analysis = {
+          title: `Chart Analysis: ${titleSentiment} Setup — BTC ${btcM ? (btcM.pctChange >= 0 ? "+" : "") + btcM.pctChange.toFixed(1) + "%" : ""}`,
+          body: text || fallbackBody(btcM, ethM, solM, totalEtfInflow),
+          keyAssets: ["BTC", "ETH", "SOL"].filter(
+            (s, i) => [btcM, ethM, solM][i] !== null,
+          ),
+        };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[ChartAnalyst] LLM call failed, using deterministic TA:", msg);
+        llmWarning = `${msg} — published deterministic TA from SoDEX data`;
+        analysis = {
+          title: `Chart Analysis: ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })} Technical Briefing`,
+          body: fallbackBody(btcM, ethM, solM, totalEtfInflow),
+          keyAssets: ["BTC", "ETH", "SOL"].filter(
+            (s, i) => [btcM, ethM, solM][i] !== null,
+          ),
+        };
+      }
     } else {
       analysis = {
         title: `Chart Analysis: ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })} Technical Briefing`,
@@ -156,7 +170,7 @@ Write a 3-5 sentence technical analysis. Include: trend direction, key support/r
 
     chartAnalystStatus.status = "idle";
     chartAnalystStatus.lastRun = new Date().toISOString();
-    chartAnalystStatus.lastError = null;
+    chartAnalystStatus.lastError = llmWarning;
     chartAnalystStatus.cycleCount++;
     console.log(`[ChartAnalyst] Published: "${newsletter.title}"`);
     return newsletter;

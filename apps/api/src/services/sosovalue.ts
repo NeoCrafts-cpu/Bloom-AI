@@ -1,6 +1,12 @@
 import type { ETFFlowData, NewsSentiment, MarketSnapshot } from "@bloom-ai/types";
 import { config } from "../config.js";
 import { cache, TTL } from "../lib/cache.js";
+import {
+  parseSodexTickerChangePct,
+  parseSodexTickerPrice,
+  parseSodexTickerVolume,
+} from "../lib/sodexParse.js";
+import { getSpotKlines } from "./sodex.js";
 
 const BASE = config.SOSOVALUE_BASE_URL;
 const HEADERS = {
@@ -173,28 +179,80 @@ async function fetchMarketSnapshotsFromSodex(): Promise<MarketSnapshot[]> {
   if (!res.ok) throw new Error(`SoDEX tickers ${res.status}`);
   const json = (await res.json()) as {
     code: number;
-    data: { symbol: string; lastPrice: string; priceChangePercent: string; volume: string; quoteVolume?: string }[];
+    data: {
+      symbol: string;
+      lastPrice?: string;
+      lastPx?: string;
+      priceChangePercent?: string;
+      changePct?: number;
+      volume?: string;
+      quoteVolume?: string;
+      q?: string;
+    }[];
   };
   const snapshots: MarketSnapshot[] = [];
   for (const ticker of json.data ?? []) {
     const base = ticker.symbol.split("_")[0];
     const standardSymbol = VTOKEN_MAP[base];
     if (!standardSymbol) continue;
-    const price = parseFloat(ticker.lastPrice);
-    if (!price || isNaN(price)) continue;
+    const price = parseSodexTickerPrice(ticker);
+    if (!price) continue;
     snapshots.push({
       symbol: standardSymbol,
       price,
-      change24h: parseFloat(ticker.priceChangePercent ?? "0"),
-      volume24h: parseFloat(ticker.quoteVolume ?? ticker.volume ?? "0"),
+      change24h: parseSodexTickerChangePct(ticker),
+      volume24h: parseSodexTickerVolume(ticker),
       marketCap: 0,
       updatedAt: new Date().toISOString(),
     });
   }
-  if (snapshots.length === 0) throw new Error("No usable tickers from SoDEX");
+  if (snapshots.length === 0) {
+    const rowCount = Array.isArray(json.data) ? json.data.length : 0;
+    if (rowCount > 0) {
+      console.warn(`[Market] SoDEX tickers returned ${rowCount} rows but none parsed`);
+    }
+    throw new Error("No usable tickers from SoDEX");
+  }
   return snapshots;
 }
 
+export type PriceDataSource = "sodex" | "coingecko" | "seed";
+
+interface MarketSnapshotBundle {
+  data: MarketSnapshot[];
+  source: PriceDataSource;
+}
+
+async function fetchMarketSnapshots(): Promise<MarketSnapshotBundle> {
+  try {
+    const data = await fetchMarketSnapshotsFromSodex();
+    return { data, source: "sodex" };
+  } catch (err) {
+    console.warn("[Market] SoDEX tickers unavailable, falling back to CoinGecko:", (err as Error).message);
+    try {
+      const data = await fetchMarketSnapshotsFromCoinGecko();
+      return { data, source: "coingecko" };
+    } catch (cgErr) {
+      console.warn("[Market] CoinGecko unavailable, using seed snapshots:", (cgErr as Error).message);
+      return { data: seedMarketSnapshots(), source: "seed" };
+    }
+  }
+}
+
+export async function getMarketSnapshots(): Promise<{
+  data: MarketSnapshot[];
+  cachedAt: number;
+  isStale: boolean;
+  source: PriceDataSource;
+}> {
+  try {
+    const result = await cache.get("market-snapshots", TTL.MARKET_PRICES, fetchMarketSnapshots);
+    return { ...result.data, cachedAt: result.cachedAt, isStale: result.isStale };
+  } catch (err) {
+    console.warn("[Market] Price snapshots unavailable:", (err as Error).message);
+    return { data: seedMarketSnapshots(), cachedAt: Date.now(), isStale: true, source: "seed" };
+  }
+}
 async function fetchMarketSnapshotsFromCoinGecko(): Promise<MarketSnapshot[]> {
   const ids = "bitcoin,ethereum,solana,bnb,avalanche-2,chainlink,arbitrum";
   const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_market_cap=true&include_24hr_vol=true`;
@@ -220,29 +278,6 @@ async function fetchMarketSnapshotsFromCoinGecko(): Promise<MarketSnapshot[]> {
   }));
 }
 
-async function fetchMarketSnapshots(): Promise<MarketSnapshot[]> {
-  try {
-    return await fetchMarketSnapshotsFromSodex();
-  } catch (err) {
-    console.warn("[Market] SoDEX tickers unavailable, falling back to CoinGecko:", (err as Error).message);
-    try {
-      return await fetchMarketSnapshotsFromCoinGecko();
-    } catch (cgErr) {
-      console.warn("[Market] CoinGecko unavailable, using seed snapshots:", (cgErr as Error).message);
-      return seedMarketSnapshots();
-    }
-  }
-}
-
-export async function getMarketSnapshots(): Promise<{ data: MarketSnapshot[]; cachedAt: number; isStale: boolean }> {
-  try {
-    return await cache.get("market-snapshots", TTL.MARKET_PRICES, fetchMarketSnapshots);
-  } catch (err) {
-    console.warn("[Market] Price snapshots unavailable:", (err as Error).message);
-    return { data: seedMarketSnapshots(), cachedAt: Date.now(), isStale: true };
-  }
-}
-
 // ─── Klines (SoDEX OHLCV) ────────────────────────────────────────────────────
 
 export async function getKlines(
@@ -250,24 +285,7 @@ export async function getKlines(
   interval = "1h",
   limit = 100,
 ): Promise<{ time: number; open: number; high: number; low: number; close: number; volume: number }[]> {
-  try {
-    const res = await fetch(
-      `${config.SODEX_SPOT_URL}/markets/${symbol}/klines?interval=${interval}&limit=${limit}`,
-      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) },
-    );
-    if (!res.ok) return [];
-    const json = (await res.json()) as { code: number; data: [number, string, string, string, string, string][] };
-    return (json.data ?? []).map(([t, o, h, l, c, v]) => ({
-      time: t,
-      open: parseFloat(o),
-      high: parseFloat(h),
-      low: parseFloat(l),
-      close: parseFloat(c),
-      volume: parseFloat(v),
-    }));
-  } catch {
-    return [];
-  }
+  return getSpotKlines(symbol, interval, limit);
 }
 
 // ─── CryptoPanic News ─────────────────────────────────────────────────────────

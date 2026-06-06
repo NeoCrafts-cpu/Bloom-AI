@@ -66,10 +66,20 @@ export async function marketRouter(app: FastifyInstance) {
   // ── Prices (SoDEX → CoinGecko → seed fallback) ─────────────────────────────
   app.get("/prices", async () => {
     const result = await getMarketSnapshots();
+    const message =
+      result.source === "seed"
+        ? "Serving seed prices — SoDEX and CoinGecko unavailable"
+        : result.source === "coingecko"
+          ? "Serving CoinGecko prices — SoDEX unavailable"
+          : result.isStale
+            ? "Serving cached prices"
+            : undefined;
     return marketEnvelope(result.data, {
       cachedAt: result.cachedAt,
-      isStale: result.isStale,
-      message: result.isStale && result.data.length > 0 ? "Serving cached or seed prices" : undefined,
+      isStale: result.isStale || result.source === "seed",
+      source: result.source,
+      status: result.source === "seed" ? "stale" : undefined,
+      message,
     });
   });
 

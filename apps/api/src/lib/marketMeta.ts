@@ -5,6 +5,7 @@ export interface MarketResponseMeta {
   isStale: boolean;
   status: MarketDataStatus;
   message?: string;
+  source?: "sodex" | "coingecko" | "seed";
 }
 
 export function resolveMarketStatus(
@@ -27,6 +28,7 @@ export function marketEnvelope<T>(
     isStale: boolean;
     status?: MarketDataStatus;
     message?: string;
+    source?: "sodex" | "coingecko" | "seed";
   },
 ): { data: T; meta: MarketResponseMeta } {
   const arr = Array.isArray(data) ? data : [];
@@ -38,6 +40,7 @@ export function marketEnvelope<T>(
       isStale: opts.isStale,
       status,
       ...(opts.message ? { message: opts.message } : {}),
+      ...(opts.source ? { source: opts.source } : {}),
     },
   };
 }

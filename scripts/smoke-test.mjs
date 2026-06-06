@@ -36,6 +36,14 @@ async function main() {
       const data = await res.json();
       if (!Array.isArray(data.data)) throw new Error("missing data array");
       if (!data.meta?.status) throw new Error("missing meta.status");
+      const btc = data.data.find((p) => p.symbol === "BTC");
+      if (!btc || typeof btc.price !== "number" || btc.price <= 0) {
+        throw new Error("missing valid BTC price");
+      }
+      // Seed fallback uses a fixed demo BTC price (~97420)
+      if (data.meta.source === "seed" || btc.price === 97420) {
+        throw new Error("prices appear to be seed data — SoDEX parsing may be broken");
+      }
     }],
     ["GET /api/market/sentiment", async () => {
       const res = await fetch(`${API_URL}/api/market/sentiment?limit=3`);
@@ -63,6 +71,11 @@ async function main() {
       const data = await res.json();
       if (!Array.isArray(data.data)) throw new Error("missing data array");
       if (!data.meta?.status) throw new Error("missing meta.status");
+      if (data.data.length === 0) throw new Error("expected SoDEX OHLCV bars");
+      const bar = data.data[0];
+      if (!bar.time || !bar.open || !bar.high || !bar.low || !bar.close) {
+        throw new Error("invalid OHLCV bar shape");
+      }
     }],
     ["GET /api/market/sodex/orderbook/vBTC_vUSDC", async () => {
       const res = await fetch(`${API_URL}/api/market/sodex/orderbook/vBTC_vUSDC`);
@@ -106,6 +119,16 @@ async function main() {
       if (!res.ok) throw new Error(`status ${res.status}`);
       const data = await res.json();
       if (typeof data.data.totalTrades !== "number") throw new Error("missing totalTrades");
+    }],
+    ["GET /api/agents/chartanalyst/status", async () => {
+      const res = await fetch(`${API_URL}/api/agents/chartanalyst/status`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      const status = data.data?.status;
+      if (!status) throw new Error("missing agent status");
+      if (status === "error") {
+        throw new Error(`chart analyst in error state: ${data.data?.lastError ?? "unknown"}`);
+      }
     }],
     ["GET /api/agents", async () => {
       const res = await fetch(`${API_URL}/api/agents`);

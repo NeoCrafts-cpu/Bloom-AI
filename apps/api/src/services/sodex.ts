@@ -3,6 +3,7 @@ import { cache, TTL } from "../lib/cache.js";
 import { getNonce } from "../signing/nonceManager.js";
 import { buildTypedSignature } from "../signing/eip712.js";
 import type { SpotOrderItem, PerpsOrderItem } from "@bloom-ai/types";
+import { parseSodexKlines, parseSodexTickerChangePct, parseSodexTickerPrice, parseSodexTickerVolume } from "../lib/sodexParse.js";
 
 const SPOT = config.SODEX_SPOT_URL;
 const PERPS = config.SODEX_PERPS_URL;
@@ -77,12 +78,53 @@ export interface SodexSymbol {
 
 export interface SpotTicker {
   symbol: string;
-  lastPrice: string;
-  priceChangePercent: string;
-  volume: string;
-  quoteVolume: string;
-  bidPrice: string;
-  askPrice: string;
+  lastPrice?: string;
+  lastPx?: string;
+  priceChangePercent?: string;
+  changePct?: number;
+  volume?: string;
+  quoteVolume?: string;
+  q?: string;
+  bidPrice?: string;
+  bidPx?: string;
+  askPrice?: string;
+  askPx?: string;
+}
+
+/** Normalized ticker fields for internal use */
+export function normalizeSpotTicker(ticker: SpotTicker) {
+  return {
+    symbol: ticker.symbol,
+    lastPrice: parseSodexTickerPrice(ticker),
+    change24h: parseSodexTickerChangePct(ticker),
+    volume24h: parseSodexTickerVolume(ticker),
+  };
+}
+
+export async function getSpotKlines(
+  symbol: string,
+  interval = "1h",
+  limit = 100,
+): Promise<{ time: number; open: number; high: number; low: number; close: number; volume: number }[]> {
+  try {
+    const res = await fetch(
+      `${SPOT}/markets/${symbol}/klines?interval=${interval}&limit=${limit}`,
+      { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) },
+    );
+    if (!res.ok) {
+      console.warn(`[SoDEX] klines ${symbol} HTTP ${res.status}`);
+      return [];
+    }
+    const json = (await res.json()) as { code: number; data: unknown };
+    const bars = parseSodexKlines(json.data);
+    if (bars.length === 0 && Array.isArray(json.data) && json.data.length > 0) {
+      console.warn(`[SoDEX] klines ${symbol} returned rows but none parsed`);
+    }
+    return bars;
+  } catch (err) {
+    console.warn(`[SoDEX] klines ${symbol} failed:`, (err as Error).message);
+    return [];
+  }
 }
 
 async function fetchSpotTickers(): Promise<SpotTicker[]> {
@@ -425,18 +467,8 @@ export async function getPerpsKlines(
       { headers: { Accept: "application/json" }, signal: AbortSignal.timeout(8000) },
     );
     if (!res.ok) return [];
-    const json = (await res.json()) as {
-      code: number;
-      data: [number, string, string, string, string, string][];
-    };
-    return (json.data ?? []).map(([t, o, h, l, c, v]) => ({
-      time: t,
-      open: parseFloat(o),
-      high: parseFloat(h),
-      low: parseFloat(l),
-      close: parseFloat(c),
-      volume: parseFloat(v),
-    }));
+    const json = (await res.json()) as { code: number; data: unknown };
+    return parseSodexKlines(json.data);
   } catch {
     return [];
   }

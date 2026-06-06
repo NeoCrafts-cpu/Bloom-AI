@@ -33,7 +33,7 @@ export const config = {
   // OpenRouter LLM
   OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY ?? "",
   OPENROUTER_MODEL:
-    process.env.OPENROUTER_MODEL ?? "anthropic/claude-3.5-sonnet",
+    process.env.OPENROUTER_MODEL ?? "~anthropic/claude-sonnet-latest",
 
   // External APIs (free tiers)
   COINGECKO_API_KEY: process.env.COINGECKO_API_KEY ?? "",

@@ -580,14 +580,33 @@ export default function ResearchPage() {
 
   useEffect(() => {
     const probe = async () => {
-      setApiStatus("unavailable");
       try {
-        const [pricesRes, sentimentRes, klinesRes] = await Promise.all([
+        const [pricesRes, sentimentRes, klinesRes, orderbookRes] = await Promise.all([
           fetch("/api/market/prices"),
           fetch("/api/market/sentiment?limit=3"),
           fetch("/api/market/klines/BTC?interval=1h&limit=24"),
+          fetch("/api/market/sodex/orderbook/vBTC_vUSDC"),
         ]);
-        setApiStatus(pricesRes.ok ? "live" : "unavailable");
+
+        if (pricesRes.ok) {
+          const j = await pricesRes.json();
+          const source = j?.meta?.source as string | undefined;
+          const st = j?.meta?.status as PanelDataStatus | undefined;
+          const hasPrices = Array.isArray(j?.data) && j.data.length > 0;
+          setApiStatus(
+            source === "sodex" && hasPrices
+              ? st === "stale" ? "stale" : "live"
+              : source === "coingecko" && hasPrices
+                ? "stale"
+                : source === "seed"
+                  ? "demo"
+                  : hasPrices
+                    ? "live"
+                    : "unavailable",
+          );
+        } else {
+          setApiStatus("unavailable");
+        }
 
         if (sentimentRes.ok) {
           const j = await sentimentRes.json();
@@ -597,19 +616,20 @@ export default function ResearchPage() {
           setSosoStatus("unavailable");
         }
 
+        let sodexLive = false;
         if (klinesRes.ok) {
           const j = await klinesRes.json();
-          const st = j?.meta?.status as PanelDataStatus | undefined;
-          setSodexStatus(
-            Array.isArray(j?.data) && j.data.length > 0
-              ? "live"
-              : st === "unavailable" || st === "empty"
-                ? "offline"
-                : "empty",
-          );
-        } else {
-          setSodexStatus("unavailable");
+          if (Array.isArray(j?.data) && j.data.length > 0) {
+            sodexLive = true;
+          }
         }
+        if (!sodexLive && orderbookRes.ok) {
+          const j = await orderbookRes.json();
+          const bids = j?.data?.bids ?? [];
+          const asks = j?.data?.asks ?? [];
+          if (bids.length > 0 || asks.length > 0) sodexLive = true;
+        }
+        setSodexStatus(sodexLive ? "live" : "offline");
       } catch {
         setApiStatus("unavailable");
         setSosoStatus("unavailable");
