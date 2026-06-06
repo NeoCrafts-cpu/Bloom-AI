@@ -110,9 +110,27 @@ function SignalsPanel({ symbol }: { symbol: string }) {
     try {
       const res  = await fetch("/api/agents/chartanalyst/trigger", { method: "POST" });
       const json = await res.json();
-      setResult(json?.data ?? null);
+      if (!res.ok) {
+        throw new Error(json?.error ?? json?.agent?.message ?? "Analysis failed");
+      }
+      if (json?.data?.title) {
+        setResult(json.data);
+        return;
+      }
+      // Fallback: load latest chart analysis from newsletter store
+      const latestRes = await fetch("/api/newsletters/latest");
+      if (latestRes.ok) {
+        const latestJson = await latestRes.json();
+        const nl = latestJson?.data;
+        if (nl?.title?.startsWith("Chart Analysis")) {
+          setResult(nl);
+          return;
+        }
+      }
+      throw new Error("No analysis content returned");
     } catch (e) {
       setError((e as Error).message || "Analysis failed");
+      setResult(null);
     } finally {
       setLoading(false);
     }
@@ -226,7 +244,14 @@ function SignalsPanel({ symbol }: { symbol: string }) {
         </div>
 
         <h3 className="text-sm font-bold text-bloom-text mb-2">{result.title}</h3>
-        <p className="text-sm text-bloom-text-muted leading-relaxed">{result.summary}</p>
+        {result.summary && (
+          <p className="text-sm text-bloom-text-muted leading-relaxed mb-3">{result.summary}</p>
+        )}
+        {result.body && (
+          <p className="text-sm text-bloom-text leading-relaxed whitespace-pre-wrap border-t border-bloom-border pt-3">
+            {result.body}
+          </p>
+        )}
 
         {result.keyAssets && result.keyAssets.length > 0 && (
           <div className="flex flex-wrap gap-1.5 mt-3">

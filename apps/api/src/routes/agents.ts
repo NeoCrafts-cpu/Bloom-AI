@@ -199,9 +199,15 @@ export async function agentRouter(app: FastifyInstance) {
     if (name === "chartanalyst") {
       agentStates.chartanalyst = { name: "chartanalyst", status: "running", message: "Analyzing klines..." };
       try {
-        await runChartAnalystCycle();
+        const newsletter = await runChartAnalystCycle();
         agentStates.chartanalyst = mapChartAnalystState();
-        return { data: agentStates.chartanalyst };
+        if (!newsletter) {
+          return reply.code(500).send({
+            error: chartAnalystStatus.lastError ?? "Chart analysis failed",
+            agent: agentStates.chartanalyst,
+          });
+        }
+        return { data: newsletter, agent: agentStates.chartanalyst };
       } catch (err) {
         agentStates.chartanalyst = {
           name: "chartanalyst",
@@ -209,7 +215,10 @@ export async function agentRouter(app: FastifyInstance) {
           lastRun: new Date().toISOString(),
           message: (err as Error).message,
         };
-        return { data: agentStates.chartanalyst };
+        return reply.code(500).send({
+          error: (err as Error).message,
+          agent: agentStates.chartanalyst,
+        });
       }
     }
     return reply.code(400).send({ error: "Agent not triggerable" });
