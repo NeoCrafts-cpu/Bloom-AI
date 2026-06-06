@@ -17,6 +17,18 @@ interface KlineBar {
   volume: number;
 }
 
+function toChartTime(ms: number): UTCTimestamp {
+  // Backend sends unix ms; lightweight-charts expects unix seconds
+  const sec = ms >= 1e12 ? Math.floor(ms / 1000) : ms;
+  return sec as UTCTimestamp;
+}
+
+function prepareBars(raw: KlineBar[]): KlineBar[] {
+  return [...raw]
+    .filter((b) => b.time > 0 && b.close > 0)
+    .sort((a, b) => a.time - b.time);
+}
+
 const SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "AVAX", "ARB", "OP"] as const;
 type ChartSymbol = (typeof SYMBOLS)[number];
 const INTERVALS = ["15m", "1h", "4h", "1d"] as const;
@@ -80,6 +92,7 @@ export default function PriceKlinesChart({
   useEffect(() => {
     if (!containerRef.current) return;
     const chart = createChart(containerRef.current, {
+      autoSize: true,
       layout: {
         background: { type: ColorType.Solid, color: "transparent" },
         textColor: "#9ca3af",
@@ -100,6 +113,7 @@ export default function PriceKlinesChart({
     });
 
     const candleSeries = chart.addSeries(CandlestickSeries, {
+      priceScaleId: "right",
       upColor:        "#10b981",
       downColor:      "#ef4444",
       borderUpColor:  "#10b981",
@@ -108,12 +122,14 @@ export default function PriceKlinesChart({
       wickDownColor:  "#ef4444",
     });
 
+    // Overlay volume on the main pane (blank priceScaleId) — avoids hijacking the price axis
     const volSeries = chart.addSeries(HistogramSeries, {
+      priceScaleId: "",
       color:       "#f97316",
       priceFormat: { type: "volume" as const },
-      priceScaleId:"volume",
     });
-    chart.priceScale("volume").applyOptions({ scaleMargins: { top: 0.8, bottom: 0 } });
+    volSeries.priceScale().applyOptions({ scaleMargins: { top: 0.85, bottom: 0 } });
+    chart.priceScale("right").applyOptions({ scaleMargins: { top: 0.05, bottom: 0.2 } });
 
     chartRef.current       = chart;
     candleSeriesRef.current = candleSeries;
@@ -135,7 +151,7 @@ export default function PriceKlinesChart({
       const limit = ivl === "1d" ? 90 : ivl === "4h" ? 120 : 96;
       const res = await fetch(`/api/market/klines/${sym}?interval=${ivl}&limit=${limit}`);
       const json = await res.json();
-      const bars: KlineBar[] = Array.isArray(json?.data) ? json.data : [];
+      const bars = prepareBars(Array.isArray(json?.data) ? json.data : []);
       const metaStatus = json?.meta?.status as string | undefined;
       const metaMessage = json?.meta?.message as string | undefined;
 
@@ -150,11 +166,11 @@ export default function PriceKlinesChart({
 
       if (bars.length > 0 && candleSeriesRef.current && volSeriesRef.current) {
         const candleData = bars.map((b) => ({
-          time:  (Math.floor(b.time / 1000)) as UTCTimestamp,
+          time:  toChartTime(b.time),
           open:  b.open, high: b.high, low: b.low, close: b.close,
         }));
         const volData = bars.map((b) => ({
-          time:  (Math.floor(b.time / 1000)) as UTCTimestamp,
+          time:  toChartTime(b.time),
           value: b.volume,
           color: b.close >= b.open ? "rgba(16,185,129,0.4)" : "rgba(239,68,68,0.4)",
         }));
