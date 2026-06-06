@@ -28,6 +28,11 @@ export interface MarketSnapshot {
   updatedAt: string;
 }
 
+// ─── Verified Signal Ledger (forward refs for newsletter) ───────────────────
+
+export type SignalSource = "journalist" | "chartanalyst" | "strategist" | "discovery";
+export type SignalStatus = "open" | "executed" | "blocked" | "expired" | "resolved";
+
 // ─── Newsletter / Journalist Agent ──────────────────────────────────────────
 
 export interface SmartMoneyNewsletter {
@@ -40,10 +45,14 @@ export interface SmartMoneyNewsletter {
   etfFlows: ETFFlowData[];
   sentiment: NewsSentiment[];
   publishedAt: string;
-  strategyId?: string; // linked SSI index
+  strategyId?: string;
+  source?: SignalSource;
+  signalId?: string;
 }
 
 // ─── SSI Protocol ────────────────────────────────────────────────────────────
+
+export type IndexPublisherStatus = "draft" | "published" | "archived";
 
 export interface SSIIndex {
   id: string;
@@ -52,9 +61,31 @@ export interface SSIIndex {
   description: string;
   assets: SSIAssetWeight[];
   tvl: number;
-  dailyFee: number; // 0.01% = 0.0001
+  dailyFee: number;
   createdAt: string;
   rebalancedAt: string;
+  status?: IndexPublisherStatus;
+  publisherAddress?: string;
+  version?: number;
+  signalId?: string;
+}
+
+export interface SSIRebalanceEvent {
+  id: string;
+  strategyId: string;
+  priorAssets: SSIAssetWeight[];
+  newAssets: SSIAssetWeight[];
+  reason: string;
+  signalId?: string;
+  timestamp: string;
+}
+
+export interface IndexComparison {
+  idA: string;
+  idB: string;
+  weightDiffs: { symbol: string; weightA: number; weightB: number; delta: number }[];
+  impliedNotionalA: number;
+  impliedNotionalB: number;
 }
 
 export interface SSIAssetWeight {
@@ -77,9 +108,9 @@ export interface SpotOrderItem {
   side: OrderSide;
   type: OrderType;
   timeInForce: TimeInForce;
-  price?: string; // DecimalString
-  quantity?: string; // DecimalString
-  funds?: string; // DecimalString (market buy only)
+  price?: string;
+  quantity?: string;
+  funds?: string;
 }
 
 export interface PerpsOrderItem {
@@ -88,10 +119,10 @@ export interface PerpsOrderItem {
   side: OrderSide;
   type: OrderType;
   timeInForce: TimeInForce;
-  price?: string; // DecimalString
-  quantity?: string; // DecimalString
-  funds?: string; // DecimalString
-  stopPrice?: string; // DecimalString
+  price?: string;
+  quantity?: string;
+  funds?: string;
+  stopPrice?: string;
   stopType?: number;
   triggerType?: number;
   reduceOnly: boolean;
@@ -116,7 +147,8 @@ export interface CopyTradeIntent {
   newsletterId: string;
   userAddress: string;
   allocationUSD: number;
-  maxSlippageBps: number; // basis points e.g. 50 = 0.5%
+  maxSlippageBps: number;
+  signalId?: string;
 }
 
 export interface CopyTradeResult {
@@ -126,6 +158,7 @@ export interface CopyTradeResult {
   orders: OrderFill[];
   totalExecutedUSD: number;
   timestamp: string;
+  simulated?: boolean;
 }
 
 // ─── Sentinel Risk ───────────────────────────────────────────────────────────
@@ -150,11 +183,14 @@ export interface SentinelReport {
 export type WSEventType =
   | "NEWSLETTER_PUBLISHED"
   | "STRATEGY_CREATED"
+  | "STRATEGY_REBALANCED"
   | "ORDER_SUBMITTED"
   | "ORDER_FILL"
   | "SENTINEL_TRIP"
   | "AGENT_STATUS"
-  | "MARKET_UPDATE";
+  | "MARKET_UPDATE"
+  | "OPPORTUNITY_UPDATED"
+  | "SIGNAL_RECORDED";
 
 export interface WSEvent<T = unknown> {
   type: WSEventType;
@@ -172,4 +208,97 @@ export interface AgentState {
   status: AgentStatus;
   lastRun?: string;
   message?: string;
+}
+
+// ─── Verified Signal Ledger ───────────────────────────────────────────────────
+
+export interface SignalEvidence {
+  source: string;
+  label: string;
+  value: string | number;
+  module: "sosovalue" | "sodex" | "defillama" | "computed";
+}
+
+export interface VerifiedSignal {
+  id: string;
+  source: SignalSource;
+  title: string;
+  summary: string;
+  publishedAt: string;
+  narrative?: SmartMoneyNewsletter["narrative"];
+  keyAssets: string[];
+  newsletterId?: string;
+  strategyId?: string;
+  inputDigest: string;
+  contentDigest: string;
+  modelVersion?: string;
+  status: SignalStatus;
+  evidence: SignalEvidence[];
+  score?: number;
+}
+
+export interface SignalOutcome {
+  signalId: string;
+  tradeId?: string;
+  newsletterId?: string;
+  strategyId: string;
+  userAddress: string;
+  entryNotionalUSD: number;
+  exitNotionalUSD?: number;
+  pnlUSD?: number;
+  pnlBps?: number;
+  horizonHours?: number;
+  resolvedAt?: string;
+  verification: {
+    sentinelPassed: boolean;
+    executionMode: "live" | "simulated";
+    userSignatureHash?: string;
+  };
+}
+
+export interface LedgerStats {
+  totalSignals: number;
+  openSignals: number;
+  executedSignals: number;
+  blockedSignals: number;
+  resolvedSignals: number;
+  bySource: Record<SignalSource, number>;
+}
+
+// ─── Opportunity Discovery ────────────────────────────────────────────────────
+
+export type OpportunityAction = "copy" | "rebalance" | "watch";
+
+export interface OpportunitySignal {
+  name: string;
+  score: number;
+  maxScore: number;
+  direction: "bullish" | "bearish" | "neutral";
+  detail: string;
+}
+
+export interface OpportunityEvidence {
+  module: string;
+  label: string;
+  value: string;
+  available: boolean;
+}
+
+export interface OpportunityScore {
+  id: string;
+  symbol: string;
+  rank: number;
+  totalScore: number;
+  maxScore: number;
+  direction: "long" | "short" | "neutral";
+  action: OpportunityAction;
+  tradable: boolean;
+  signals: OpportunitySignal[];
+  evidence: OpportunityEvidence[];
+  missingInputs: string[];
+  thesis: string;
+  signalId?: string;
+  strategyId?: string;
+  cachedAt: string;
+  isStale: boolean;
 }
