@@ -13,17 +13,16 @@ const SYMBOLS = ["vBTC_vUSDC", "vETH_vUSDC", "vSOL_vUSDC"] as const;
 type WSSymbol = (typeof SYMBOLS)[number];
 const LABEL: Record<WSSymbol, string> = { vBTC_vUSDC: "BTC", vETH_vUSDC: "ETH", vSOL_vUSDC: "SOL" };
 
-const WS_URL = "wss://testnet-gw.sodex.dev/ws/spot";
+const WS_URL = process.env.NEXT_PUBLIC_SODEX_WS_SPOT ?? "wss://testnet-gw.sodex.dev/ws/spot";
 const REST_POLL_MS = 4000;
+const ENABLE_SODEX_WS = process.env.NEXT_PUBLIC_SODEX_WS_ENABLED === "true";
 
 interface DepthPoint { price: number; bidQty: number | undefined; askQty: number | undefined }
 
 function buildDepth(bids: Level[], asks: Level[], steps = 40): DepthPoint[] {
-  // Sort
-  const sb = [...bids].sort((a, b) => b.price - a.price).slice(0, steps);
-  const sa = [...asks].sort((a, b) => a.price - b.price).slice(0, steps);
+  const sb = [...bids].filter((l) => l.price > 0 && l.qty >= 0).sort((a, b) => b.price - a.price).slice(0, steps);
+  const sa = [...asks].filter((l) => l.price > 0 && l.qty >= 0).sort((a, b) => a.price - b.price).slice(0, steps);
 
-  // Cumulate
   let cumB = 0;
   const bidSeries = sb.map((l) => { cumB += l.qty; return { price: l.price, bidQty: cumB, askQty: undefined }; }).reverse();
   let cumA = 0;
@@ -48,14 +47,26 @@ const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: { name
 };
 
 export default function LiveOrderBook() {
-  const [symbol, setSymbol]   = useState<WSSymbol>("vBTC_vUSDC");
-  const [book, setBook]       = useState<BookState>({ bids: [], asks: [], symbol });
-  const [wsStatus, setWsStatus] = useState<"connecting" | "open" | "closed" | "error">("closed");
+  const [symbol, setSymbol]       = useState<WSSymbol>("vBTC_vUSDC");
+  const [book, setBook]           = useState<BookState>({ bids: [], asks: [], symbol });
+  const [source, setSource]       = useState<"rest" | "websocket">("rest");
+  const [wsStatus, setWsStatus]   = useState<"idle" | "connecting" | "open" | "closed" | "error">("idle");
   const wsRef  = useRef<WebSocket | null>(null);
   const pingRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  // REST fallback polling
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? 0;
+      setContainerWidth(w);
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
   const startPoll = useCallback((sym: WSSymbol) => {
     if (pollRef.current) clearInterval(pollRef.current);
     const poll = async () => {
@@ -67,24 +78,32 @@ export default function LiveOrderBook() {
         const bids: Level[] = (j.data.bids ?? []).map(([p, q]: [string, string]) => ({ price: parseFloat(p), qty: parseFloat(q) }));
         const asks: Level[] = (j.data.asks ?? []).map(([p, q]: [string, string]) => ({ price: parseFloat(p), qty: parseFloat(q) }));
         setBook({ bids, asks, symbol: sym });
+        if (source !== "websocket") setSource("rest");
       } catch { /* silent */ }
     };
     poll();
     pollRef.current = setInterval(poll, REST_POLL_MS);
-  }, []);
+  }, [source]);
 
   const connectWS = useCallback((sym: WSSymbol) => {
-    // Close existing
+    if (!ENABLE_SODEX_WS) return;
+
     if (wsRef.current) { wsRef.current.close(); wsRef.current = null; }
     if (pingRef.current) { clearInterval(pingRef.current); pingRef.current = null; }
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
 
     setWsStatus("connecting");
-    const ws = new WebSocket(WS_URL);
+    let ws: WebSocket;
+    try {
+      ws = new WebSocket(WS_URL);
+    } catch {
+      setWsStatus("error");
+      return;
+    }
     wsRef.current = ws;
 
     ws.onopen = () => {
       setWsStatus("open");
+      setSource("websocket");
       ws.send(JSON.stringify({ op: "subscribe", params: { type: "l2book", symbol: sym } }));
       pingRef.current = setInterval(() => {
         if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ op: "ping" }));
@@ -99,30 +118,28 @@ export default function LiveOrderBook() {
           const asks: Level[] = msg.data.asks.map(([p, q]: [string, string]) => ({ price: parseFloat(p), qty: parseFloat(q) }));
           setBook({ bids, asks, symbol: sym });
         }
-      } catch { /* ignore parse errors */ }
+      } catch { /* ignore */ }
     };
 
-    ws.onerror = () => {
-      setWsStatus("error");
-      startPoll(sym);
-    };
-
+    ws.onerror = () => setWsStatus("error");
     ws.onclose = () => {
       setWsStatus("closed");
-      startPoll(sym);
+      setSource("rest");
     };
-  }, [startPoll]);
+  }, []);
 
   useEffect(() => {
+    startPoll(symbol);
     connectWS(symbol);
     return () => {
       wsRef.current?.close();
       if (pingRef.current) clearInterval(pingRef.current);
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [symbol, connectWS]);
+  }, [symbol, startPoll, connectWS]);
 
   const depth = buildDepth(book.bids, book.asks);
+  const canRenderChart = containerWidth > 48 && depth.length >= 2;
   const midPrice = book.bids[0] && book.asks[0]
     ? ((book.bids[0].price + book.asks[0].price) / 2)
     : null;
@@ -139,11 +156,12 @@ export default function LiveOrderBook() {
           </div>
           <div>
             <h3 className="text-sm font-bold text-bloom-text">L2 Order Book Depth</h3>
-            <p className="text-xs text-bloom-text-muted">SoDEX Testnet · Live</p>
+            <p className="text-xs text-bloom-text-muted">
+              SoDEX Testnet · {source === "websocket" ? "WebSocket" : "REST fallback"}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {/* Symbol buttons */}
           {SYMBOLS.map((s) => (
             <button
               key={s}
@@ -157,15 +175,14 @@ export default function LiveOrderBook() {
               {LABEL[s]}
             </button>
           ))}
-          {/* WS status */}
           <div className={`w-2 h-2 rounded-full ${
             wsStatus === "open"        ? "bg-emerald-400 animate-pulse"
             : wsStatus === "connecting" ? "bg-yellow-400 animate-pulse"
-            : wsStatus === "error"      ? "bg-red-400"
+            : wsStatus === "error"      ? "bg-amber-400"
             : "bg-bloom-text-muted"
           }`} title={wsStatus} />
           <button
-            onClick={() => connectWS(symbol)}
+            onClick={() => { startPoll(symbol); connectWS(symbol); }}
             className="p-1.5 rounded-lg hover:bg-bloom-card-hover text-bloom-text-muted"
           >
             <RefreshCw size={12} />
@@ -173,7 +190,6 @@ export default function LiveOrderBook() {
         </div>
       </div>
 
-      {/* Stats */}
       {midPrice !== null && (
         <div className="grid grid-cols-3 gap-2 mb-4">
           <div className="bg-bloom-card-hover rounded-xl p-2.5 text-center">
@@ -186,71 +202,58 @@ export default function LiveOrderBook() {
           </div>
           <div className="bg-bloom-card-hover rounded-xl p-2.5 text-center">
             <p className="text-[9px] text-bloom-text-muted uppercase">Source</p>
-            <p className="text-[10px] font-semibold text-bloom-text">{wsStatus === "open" ? "WebSocket" : "REST Poll"}</p>
+            <p className="text-[10px] font-semibold text-bloom-text">{source === "websocket" ? "WebSocket" : "REST Poll"}</p>
           </div>
         </div>
       )}
 
-      {wsStatus === "error" && (
-        <div className="flex items-center gap-1.5 mb-3 text-[10px] text-yellow-400">
+      {wsStatus === "error" && source === "rest" && (
+        <div className="flex items-center gap-1.5 mb-3 text-[10px] text-amber-400">
           <AlertTriangle size={11} />
-          WebSocket unavailable — polling REST endpoint
+          Realtime offline · polling REST order book
         </div>
       )}
 
-      {depth.length === 0 ? (
-        <div className="h-48 flex items-center justify-center text-xs text-bloom-text-muted">
-          {wsStatus === "connecting" ? (
-            <div className="flex items-center gap-2">
-              <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-              Connecting to order book...
-            </div>
-          ) : "No order book data"}
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height={220}>
-          <AreaChart data={depth} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
-            <defs>
-              <linearGradient id="bidGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#10b981" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
-              </linearGradient>
-              <linearGradient id="askGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.4} />
-                <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-            <XAxis
-              dataKey="price"
-              type="number"
-              domain={["dataMin", "dataMax"]}
-              tickFormatter={(v) => `$${Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
-              tick={{ fontSize: 9, fill: "#6b7280" }}
-              scale="linear"
-            />
-            <YAxis tick={{ fontSize: 9, fill: "#6b7280" }} width={40} />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend formatter={(v) => (v === "bidQty" ? "Bids" : "Asks")} wrapperStyle={{ fontSize: 10 }} />
-            <Area
-              type="stepAfter"
-              dataKey="bidQty"
-              stroke="#10b981"
-              strokeWidth={1.5}
-              fill="url(#bidGrad)"
-              connectNulls={false}
-            />
-            <Area
-              type="stepBefore"
-              dataKey="askQty"
-              stroke="#ef4444"
-              strokeWidth={1.5}
-              fill="url(#askGrad)"
-              connectNulls={false}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      )}
+      <div ref={containerRef}>
+        {depth.length === 0 ? (
+          <div className="h-48 flex items-center justify-center text-xs text-bloom-text-muted">
+            No order book data
+          </div>
+        ) : !canRenderChart ? (
+          <div className="h-48 flex items-center justify-center text-xs text-bloom-text-muted">
+            Loading chart…
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height={220}>
+            <AreaChart data={depth} margin={{ top: 4, right: 4, bottom: 0, left: 4 }}>
+              <defs>
+                <linearGradient id="bidGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.02} />
+                </linearGradient>
+                <linearGradient id="askGrad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%"  stopColor="#ef4444" stopOpacity={0.4} />
+                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0.02} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
+              <XAxis
+                dataKey="price"
+                type="number"
+                domain={["dataMin", "dataMax"]}
+                tickFormatter={(v) => `$${Number(v).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+                tick={{ fontSize: 9, fill: "#6b7280" }}
+                scale="linear"
+              />
+              <YAxis tick={{ fontSize: 9, fill: "#6b7280" }} width={40} />
+              <Tooltip content={<CustomTooltip />} />
+              <Legend formatter={(v) => (v === "bidQty" ? "Bids" : "Asks")} wrapperStyle={{ fontSize: 10 }} />
+              <Area type="stepAfter" dataKey="bidQty" stroke="#10b981" strokeWidth={1.5} fill="url(#bidGrad)" connectNulls={false} />
+              <Area type="stepBefore" dataKey="askQty" stroke="#ef4444" strokeWidth={1.5} fill="url(#askGrad)" connectNulls={false} />
+            </AreaChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
   );
 }

@@ -23,77 +23,104 @@ import {
   getPerpsSymbols,
   getPerpsAccountState,
 } from "../services/sodex.js";
+import { marketEnvelope, unavailableEnvelope } from "../lib/marketMeta.js";
 
 export async function marketRouter(app: FastifyInstance) {
   // ── Overview (all at once) ─────────────────────────────────────────────────
   app.get("/overview", async () => {
-    const [markets, etf, sentiment] = await Promise.all([
+    const [marketsResult, etfResult, sentimentResult] = await Promise.allSettled([
       getMarketSnapshots(),
       getETFFlows(),
       getNewsSentiment(5),
     ]);
+
+    const markets =
+      marketsResult.status === "fulfilled"
+        ? marketsResult.value
+        : { data: [], cachedAt: Date.now(), isStale: true };
+    const etf =
+      etfResult.status === "fulfilled"
+        ? etfResult.value
+        : { data: [], cachedAt: Date.now(), isStale: true };
+    const sentiment =
+      sentimentResult.status === "fulfilled"
+        ? sentimentResult.value
+        : { data: [], cachedAt: Date.now(), isStale: true };
+
     return {
       data: { markets: markets.data, etf: etf.data, sentiment: sentiment.data },
-      meta: { marketsCachedAt: markets.cachedAt, etfCachedAt: etf.cachedAt, newsCachedAt: sentiment.cachedAt },
+      meta: {
+        markets: marketEnvelope(markets.data, {
+          cachedAt: markets.cachedAt,
+          isStale: markets.isStale,
+        }).meta,
+        etf: marketEnvelope(etf.data, { cachedAt: etf.cachedAt, isStale: etf.isStale }).meta,
+        sentiment: marketEnvelope(sentiment.data, {
+          cachedAt: sentiment.cachedAt,
+          isStale: sentiment.isStale,
+        }).meta,
+      },
     };
   });
 
-  // ── Prices (SoDEX → CoinGecko fallback) ───────────────────────────────────
-  app.get("/prices", async (req, reply) => {
-    try {
-      const result = await getMarketSnapshots();
-      return { data: result.data, meta: { cachedAt: result.cachedAt, isStale: result.isStale } };
-    } catch {
-      reply.code(503);
-      return { data: [], error: "Price data temporarily unavailable", meta: { cachedAt: null, isStale: false } };
-    }
+  // ── Prices (SoDEX → CoinGecko → seed fallback) ─────────────────────────────
+  app.get("/prices", async () => {
+    const result = await getMarketSnapshots();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: result.isStale && result.data.length > 0 ? "Serving cached or seed prices" : undefined,
+    });
   });
 
   // ── ETF Flows ──────────────────────────────────────────────────────────────
-  app.get("/etf-flows", async (req, reply) => {
-    try {
-      const result = await getETFFlows();
-      return { data: result.data, meta: { cachedAt: result.cachedAt, isStale: result.isStale } };
-    } catch {
-      reply.code(503);
-      return { data: [], error: "ETF data temporarily unavailable", meta: { cachedAt: null, isStale: false } };
-    }
+  app.get("/etf-flows", async () => {
+    const result = await getETFFlows();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message:
+        result.data.length === 0
+          ? "ETF flow data unavailable from SoSoValue"
+          : result.isStale
+            ? "Serving cached ETF flows"
+            : undefined,
+    });
   });
 
   // ── News Sentiment ─────────────────────────────────────────────────────────
-  app.get<{ Querystring: { limit?: string } }>("/sentiment", async (req, reply) => {
+  app.get<{ Querystring: { limit?: string } }>("/sentiment", async (req) => {
     const limit = Math.min(parseInt(req.query.limit ?? "12", 10), 50);
-    try {
-      const result = await getNewsSentiment(limit);
-      return { data: result.data, meta: { cachedAt: result.cachedAt, isStale: result.isStale } };
-    } catch {
-      reply.code(503);
-      return { data: [], error: "News data temporarily unavailable", meta: { cachedAt: null, isStale: false } };
-    }
+    const result = await getNewsSentiment(limit);
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message:
+        result.data.length === 0
+          ? "News sentiment unavailable — optional panel"
+          : result.isStale
+            ? "Serving cached sentiment"
+            : undefined,
+    });
   });
 
   // ── ETF Summary ────────────────────────────────────────────────────────────
-  app.get("/etf-summary", async (req, reply) => {
-    try {
-      const result = await getETFFlows();
-      const flows = result.data;
-      const totalNetInflow = flows.reduce((s, f) => s + f.netInflow, 0);
-      const totalAUM = flows.reduce((s, f) => s + f.totalAUM, 0);
-      return {
-        data: {
-          totalNetInflow,
-          totalAUM,
-          inflowCount: flows.filter((f) => f.netInflow > 0).length,
-          outflowCount: flows.filter((f) => f.netInflow < 0).length,
-          tickers: flows.length,
-          date: flows[0]?.date ?? new Date().toISOString().slice(0, 10),
-        },
-        meta: { cachedAt: result.cachedAt, isStale: result.isStale },
-      };
-    } catch {
-      reply.code(503);
-      return { data: null, error: "ETF summary temporarily unavailable" };
-    }
+  app.get("/etf-summary", async () => {
+    const result = await getETFFlows();
+    const flows = result.data;
+    const summary = {
+      totalNetInflow: flows.reduce((s, f) => s + f.netInflow, 0),
+      totalAUM: flows.reduce((s, f) => s + f.totalAUM, 0),
+      inflowCount: flows.filter((f) => f.netInflow > 0).length,
+      outflowCount: flows.filter((f) => f.netInflow < 0).length,
+      tickers: flows.length,
+      date: flows[0]?.date ?? new Date().toISOString().slice(0, 10),
+    };
+    return marketEnvelope(summary, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: flows.length === 0 ? "ETF summary unavailable" : undefined,
+    });
   });
 
   // ── SoDEX Tickers ─────────────────────────────────────────────────────────
@@ -154,27 +181,30 @@ export async function marketRouter(app: FastifyInstance) {
   );
 
   // ── DeFi TVL ──────────────────────────────────────────────────────────────
-  app.get("/defi-tvl", async (req, reply) => {
-    try {
-      const data = await getDefiLlamaTVL();
-      return { data };
-    } catch {
-      reply.code(503);
-      return { data: [], error: "DeFi TVL data temporarily unavailable" };
-    }
+  app.get("/defi-tvl", async () => {
+    const data = await getDefiLlamaTVL();
+    return marketEnvelope(data, {
+      cachedAt: data.length > 0 ? Date.now() : null,
+      isStale: false,
+      message: data.length === 0 ? "DeFi TVL temporarily unavailable" : undefined,
+    });
   });
 
   // ── ETF Summary History ───────────────────────────────────────────────────
-  app.get<{ Querystring: { symbol?: string; limit?: string } }>("/etf-history", async (req, reply) => {
-    try {
-      const symbol = req.query.symbol ?? "BTC";
-      const limit  = Math.min(parseInt(req.query.limit ?? "30", 10), 90);
-      const result = await getETFSummaryHistory(symbol, limit);
-      return { data: result.data, meta: { cachedAt: result.cachedAt, isStale: result.isStale } };
-    } catch {
-      reply.code(503);
-      return { data: [], error: "ETF history temporarily unavailable" };
-    }
+  app.get<{ Querystring: { symbol?: string; limit?: string } }>("/etf-history", async (req) => {
+    const symbol = req.query.symbol ?? "BTC";
+    const limit = Math.min(parseInt(req.query.limit ?? "30", 10), 90);
+    const result = await getETFSummaryHistory(symbol, limit);
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message:
+        result.data.length === 0
+          ? `No ETF history available for ${symbol}`
+          : result.isStale
+            ? "Serving cached ETF history"
+            : undefined,
+    });
   });
 
   // ── Klines (SoDEX OHLCV, by base symbol e.g. "BTC") ──────────────────────
@@ -184,91 +214,100 @@ export async function marketRouter(app: FastifyInstance) {
       try {
         const base = req.params.symbol.toUpperCase();
         const sodexSymbol = await getSymbolName(base);
-        if (!sodexSymbol) return reply.code(404).send({ error: `Symbol ${base} not found on SoDEX` });
+        if (!sodexSymbol) {
+          return unavailableEnvelope([], `Symbol ${base} not found on SoDEX`);
+        }
         const interval = req.query.interval ?? "1h";
-        const limit    = Math.min(parseInt(req.query.limit ?? "96", 10), 500);
+        const limit = Math.min(parseInt(req.query.limit ?? "96", 10), 500);
         const data = await getKlines(sodexSymbol, interval, limit);
-        return { data, meta: { symbol: sodexSymbol, interval, limit } };
+        return marketEnvelope(data, {
+          cachedAt: data.length > 0 ? Date.now() : null,
+          isStale: false,
+          message: data.length === 0 ? "Klines temporarily unavailable" : undefined,
+        });
       } catch {
-        reply.code(503);
-        return { data: [], error: "Klines temporarily unavailable" };
+        return unavailableEnvelope([], "Klines temporarily unavailable");
       }
     },
   );
 
   // ── Market Heatmap (top currencies with marketcap + 24h change) ──────────
-  app.get("/heatmap", async (req, reply) => {
-    try {
-      // Primary: SoSoValue currency list + snapshot for top coins
-      // Fallback: getMarketSnapshots() which has CoinGecko data with marketCap
-      const snapshots = await getMarketSnapshots();
-      // SoSoValue adds detail per currency_id; we enrich with it when available
-      const currencyResult = await getCurrencyList().catch(() => null);
-      const currencies = currencyResult?.data ?? [];
+  app.get("/heatmap", async () => {
+    const snapshots = await getMarketSnapshots();
+    const currencyResult = await getCurrencyList().catch(() => null);
+    const currencies = currencyResult?.data ?? [];
 
-      // Enrich with per-coin SoSoValue snapshots (up to 10 coins)
-      const enriched = await Promise.allSettled(
-        snapshots.data.slice(0, 10).map(async (snap) => {
-          const cur = currencies.find((c) => c.symbol.toUpperCase() === snap.symbol);
-          if (cur) {
-            const detail = await getCurrencySnapshot(cur.currency_id).catch(() => null);
-            return {
-              symbol: snap.symbol,
-              price: snap.price,
-              change24h: detail?.change_pct_24h ?? snap.change24h,
-              marketCap: detail?.marketcap ?? snap.marketCap ?? 0,
-              volume24h: detail?.turnover_24h ?? snap.volume24h,
-              rank: detail?.marketcap_rank ?? 99,
-            };
-          }
+    const enriched = await Promise.allSettled(
+      snapshots.data.slice(0, 10).map(async (snap) => {
+        const cur = currencies.find((c) => c.symbol.toUpperCase() === snap.symbol);
+        if (cur) {
+          const detail = await getCurrencySnapshot(cur.currency_id).catch(() => null);
           return {
             symbol: snap.symbol,
             price: snap.price,
-            change24h: snap.change24h,
-            marketCap: snap.marketCap ?? 0,
-            volume24h: snap.volume24h,
-            rank: 99,
+            change24h: detail?.change_pct_24h ?? snap.change24h,
+            marketCap: detail?.marketcap ?? snap.marketCap ?? 0,
+            volume24h: detail?.turnover_24h ?? snap.volume24h,
+            rank: detail?.marketcap_rank ?? 99,
           };
-        }),
-      );
+        }
+        return {
+          symbol: snap.symbol,
+          price: snap.price,
+          change24h: snap.change24h,
+          marketCap: snap.marketCap ?? 0,
+          volume24h: snap.volume24h,
+          rank: 99,
+        };
+      }),
+    );
 
-      const data = enriched
-        .filter((r): r is PromiseFulfilledResult<typeof r extends PromiseFulfilledResult<infer V> ? V : never> =>
-          r.status === "fulfilled",
-        )
-        .map((r) => r.value);
+    const data = enriched
+      .filter((r): r is PromiseFulfilledResult<(typeof enriched)[0] extends PromiseFulfilledResult<infer V> ? V : never> =>
+        r.status === "fulfilled",
+      )
+      .map((r) => r.value);
 
-      return { data };
-    } catch {
-      reply.code(503);
-      return { data: [], error: "Heatmap data temporarily unavailable" };
-    }
+    return marketEnvelope(data, {
+      cachedAt: snapshots.cachedAt,
+      isStale: snapshots.isStale,
+      message: data.length === 0 ? "Heatmap data temporarily unavailable" : undefined,
+    });
   });
 
   // ── VC Fundraising for a symbol ───────────────────────────────────────────
-  app.get<{ Params: { symbol: string } }>("/fundraising/:symbol", async (req, reply) => {
-    try {
-      const symbol = req.params.symbol.toUpperCase();
-      const currencyId = await getCurrencyIdBySymbol(symbol);
-      if (!currencyId) {
-        return reply.code(404).send({ error: `Currency ${symbol} not found in SoSoValue` });
-      }
-      const result = await getCurrencyFundraising(currencyId);
-      return { data: result.data, meta: { currencyId, cachedAt: result.cachedAt, isStale: result.isStale } };
-    } catch {
-      reply.code(503);
-      return { data: null, error: "Fundraising data temporarily unavailable" };
+  app.get<{ Params: { symbol: string } }>("/fundraising/:symbol", async (req) => {
+    const symbol = req.params.symbol.toUpperCase();
+    const currencyId = await getCurrencyIdBySymbol(symbol);
+    if (!currencyId) {
+      return marketEnvelope(null, {
+        cachedAt: null,
+        isStale: false,
+        status: "empty",
+        message: `No SoSoValue fundraising record for ${symbol}`,
+      });
     }
+    const result = await getCurrencyFundraising(currencyId);
+    const hasRounds = (result.data?.fundraising_rounds?.length ?? 0) > 0;
+    return {
+      data: result.data,
+      meta: {
+        currencyId,
+        cachedAt: result.cachedAt,
+        isStale: result.isStale,
+        status: hasRounds ? (result.isStale ? "stale" : "live") : "empty",
+        message: hasRounds ? undefined : `No SoSoValue fundraising record for ${symbol}`,
+      },
+    };
   });
 
   // ── Perps Mark Prices ─────────────────────────────────────────────────────
-  app.get("/perps/mark-prices", async (req, reply) => {
+  app.get("/perps/mark-prices", async () => {
     try {
       const data = await getPerpsMarkPrices();
-      return { data };
+      return marketEnvelope(data, { cachedAt: Date.now(), isStale: false });
     } catch {
-      reply.code(503);
-      return { data: [], error: "Perps mark prices temporarily unavailable" };
+      return unavailableEnvelope([], "Perps mark prices temporarily unavailable");
     }
   });
 
@@ -276,22 +315,23 @@ export async function marketRouter(app: FastifyInstance) {
   app.get<{ Params: { address: string } }>("/perps/:address/state", async (req, reply) => {
     try {
       const state = await getPerpsAccountState(req.params.address);
-      if (!state) return reply.code(404).send({ data: null, error: "Perps account not found" });
+      if (!state) {
+        reply.code(404);
+        return { data: null, error: "Perps account not found" };
+      }
       return { data: state };
     } catch {
-      reply.code(503);
-      return { data: null, error: "Perps account data temporarily unavailable" };
+      return unavailableEnvelope(null, "Perps account data temporarily unavailable");
     }
   });
 
   // ── Perps Symbols ─────────────────────────────────────────────────────────
-  app.get("/perps/symbols", async (req, reply) => {
+  app.get("/perps/symbols", async () => {
     try {
       const data = await getPerpsSymbols();
-      return { data };
+      return marketEnvelope(data, { cachedAt: Date.now(), isStale: false });
     } catch {
-      reply.code(503);
-      return { data: [], error: "Perps symbols temporarily unavailable" };
+      return unavailableEnvelope([], "Perps symbols temporarily unavailable");
     }
   });
 }

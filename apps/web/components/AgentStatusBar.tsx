@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { motion } from "framer-motion";
-import { Brain, Layers, Zap, Shield, LineChart, Play, ChevronRight } from "lucide-react";
+import { Brain, Layers, Zap, Shield, LineChart, Play, ChevronRight, RefreshCw } from "lucide-react";
 import type { AgentState } from "@bloom-ai/types";
 
 const PIPELINE_ORDER = ["journalist", "chartanalyst", "strategist", "broker", "sentinel"] as const;
@@ -15,17 +15,16 @@ const AGENT_CONFIG: Record<string, { icon: React.ElementType; label: string; des
   sentinel:     { icon: Shield,    label: "Sentinel",      description: "Risk-checks all payloads live" },
 };
 
-const MOCK_INITIAL: AgentState[] = [
-  { name: "journalist",   status: "running", lastRun: new Date().toISOString(), message: "Polling SoSoValue Terminal API..." },
-  { name: "chartanalyst", status: "running", lastRun: new Date().toISOString(), message: "Monitoring SoDEX klines..." },
-  { name: "strategist",   status: "idle",    lastRun: new Date(Date.now() - 180000).toISOString() },
-  { name: "broker",       status: "idle" },
-  { name: "sentinel",     status: "running", message: "Monitoring all payloads" },
-];
+const IDLE_INITIAL: AgentState[] = PIPELINE_ORDER.map((name) => ({
+  name,
+  status: "idle" as const,
+  message: "Loading agent status…",
+}));
 
 export default function AgentStatusBar() {
-  const [agents, setAgents]       = useState<AgentState[]>(MOCK_INITIAL);
+  const [agents, setAgents]       = useState<AgentState[]>(IDLE_INITIAL);
   const [triggering, setTriggering] = useState(false);
+  const [loadError, setLoadError]   = useState<string | null>(null);
   const [activeStep, setActiveStep] = useState(-1);
   const stepTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -44,6 +43,24 @@ export default function AgentStatusBar() {
     stepTimer.current = setTimeout(tick, 650);
   };
 
+  const fetchAgents = async () => {
+    try {
+      const res = await fetch("/api/agents");
+      if (res.ok) {
+        const data = await res.json();
+        const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null;
+        if (list) {
+          setAgents(list);
+          setLoadError(null);
+        }
+      } else {
+        setLoadError("Agent status unavailable");
+      }
+    } catch {
+      setLoadError("Agent status offline");
+    }
+  };
+
   const triggerPipeline = async () => {
     setTriggering(true);
     animatePipeline();
@@ -52,26 +69,24 @@ export default function AgentStatusBar() {
       if (res.ok) {
         const data = await res.json();
         const list = Array.isArray(data?.data) ? data.data : null;
-        if (list) setAgents(list);
+        if (list) {
+          setAgents(list);
+          setLoadError(null);
+        }
+      } else {
+        setLoadError("Pipeline trigger failed");
       }
-    } catch { /* ignore */ } finally {
+    } catch {
+      setLoadError("Pipeline trigger failed — API offline");
+    } finally {
       setTriggering(false);
+      setTimeout(fetchAgents, 1200);
     }
   };
 
   useEffect(() => {
-    const poll = async () => {
-      try {
-        const res = await fetch("/api/agents");
-        if (res.ok) {
-          const data = await res.json();
-          const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null;
-          if (list) setAgents(list);
-        }
-      } catch { /* fallback to mock */ }
-    };
-    poll();
-    const interval = setInterval(poll, 10000);
+    fetchAgents();
+    const interval = setInterval(fetchAgents, 10000);
     return () => {
       clearInterval(interval);
       if (stepTimer.current) clearTimeout(stepTimer.current);
@@ -79,10 +94,10 @@ export default function AgentStatusBar() {
   }, []);
 
   const agentMap = Object.fromEntries(agents.map((a) => [a.name, a]));
+  const errorAgent = agents.find((a) => a.status === "error");
 
   return (
     <div className="glass-card p-5 mb-6">
-      {/* Header row */}
       <div className="flex items-center justify-between mb-5">
         <div>
           <h3 className="text-sm font-bold text-bloom-text">AI Agent Pipeline</h3>
@@ -90,17 +105,33 @@ export default function AgentStatusBar() {
             Data flows left-to-right — each agent hands off to the next
           </p>
         </div>
-        <button
-          onClick={triggerPipeline}
-          disabled={triggering}
-          className="orange-btn flex items-center gap-1.5 text-xs px-4 py-1.5 disabled:opacity-60"
-        >
-          <Play size={10} className={triggering ? "animate-pulse" : ""} />
-          {triggering ? "Running…" : "Run Full Pipeline"}
-        </button>
+        <div className="flex items-center gap-2">
+          {loadError && (
+            <button
+              onClick={fetchAgents}
+              className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg border border-amber-800/30 text-amber-400 bg-amber-900/20"
+            >
+              <RefreshCw size={10} />
+              Retry
+            </button>
+          )}
+          <button
+            onClick={triggerPipeline}
+            disabled={triggering}
+            className="orange-btn flex items-center gap-1.5 text-xs px-4 py-1.5 disabled:opacity-60"
+          >
+            <Play size={10} className={triggering ? "animate-pulse" : ""} />
+            {triggering ? "Running…" : "Run Full Pipeline"}
+          </button>
+        </div>
       </div>
 
-      {/* Pipeline nodes */}
+      {(loadError || errorAgent) && (
+        <div className="mb-4 px-3 py-2 rounded-xl border border-red-800/30 bg-red-900/15 text-xs text-red-300">
+          {errorAgent?.message ?? loadError}
+        </div>
+      )}
+
       <div className="flex items-start overflow-x-auto pb-1 gap-0">
         {PIPELINE_ORDER.map((name, i) => {
           const agent  = agentMap[name];
@@ -112,7 +143,6 @@ export default function AgentStatusBar() {
 
           return (
             <div key={name} className="flex items-start shrink-0">
-              {/* Node */}
               <motion.div
                 animate={animating ? { scale: [1, 1.07, 1] } : { scale: 1 }}
                 transition={{ duration: 0.4 }}
@@ -140,22 +170,22 @@ export default function AgentStatusBar() {
                   <p className={`text-[10px] leading-tight max-w-[82px] text-center transition-colors duration-300 ${
                     lit ? "text-bloom-text-muted" : "text-bloom-text-muted/50"
                   }`}>
-                    {config.description}
+                    {agent?.message ?? config.description}
                   </p>
                 </div>
-                {/* Status chip */}
                 <span className={`text-[9px] font-semibold px-2 py-0.5 rounded-full transition-all duration-300 ${
                   status === "running"
                     ? "bg-bloom-orange/20 text-bloom-orange"
                     : status === "error"
                     ? "bg-red-900/30 text-red-400"
+                    : status === "paused"
+                    ? "bg-white/5 text-bloom-text-muted/60"
                     : "bg-white/5 text-bloom-text-muted/60"
                 }`}>
-                  {status === "running" ? "RUNNING" : status === "error" ? "ERROR" : "IDLE"}
+                  {status === "running" ? "RUNNING" : status === "error" ? "ERROR" : status === "paused" ? "PAUSED" : "IDLE"}
                 </span>
               </motion.div>
 
-              {/* Connector arrow */}
               {i < PIPELINE_ORDER.length - 1 && (
                 <div className="flex items-center self-center px-1 pt-3">
                   <motion.div

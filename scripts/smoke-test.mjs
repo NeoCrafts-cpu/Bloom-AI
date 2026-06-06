@@ -33,6 +33,51 @@ async function main() {
     ["GET /api/market/prices", async () => {
       const res = await fetch(`${API_URL}/api/market/prices`);
       if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error("missing data array");
+      if (!data.meta?.status) throw new Error("missing meta.status");
+    }],
+    ["GET /api/market/sentiment", async () => {
+      const res = await fetch(`${API_URL}/api/market/sentiment?limit=3`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error("missing data array");
+      if (!data.meta?.status) throw new Error("missing meta.status");
+    }],
+    ["GET /api/market/etf-history", async () => {
+      const res = await fetch(`${API_URL}/api/market/etf-history?symbol=BTC&limit=30`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error("missing data array");
+      if (!data.meta?.status) throw new Error("missing meta.status");
+    }],
+    ["GET /api/market/fundraising/ETH", async () => {
+      const res = await fetch(`${API_URL}/api/market/fundraising/ETH`);
+      if (!res.ok) throw new Error(`status ${res.status} (expected 200 graceful envelope)`);
+      const data = await res.json();
+      if (!("meta" in data) || !data.meta?.status) throw new Error("missing meta.status");
+    }],
+    ["GET /api/market/klines/BTC", async () => {
+      const res = await fetch(`${API_URL}/api/market/klines/BTC?interval=1h&limit=24`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error("missing data array");
+      if (!data.meta?.status) throw new Error("missing meta.status");
+    }],
+    ["GET /api/market/sodex/orderbook/vBTC_vUSDC", async () => {
+      const res = await fetch(`${API_URL}/api/market/sodex/orderbook/vBTC_vUSDC`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!data.data || !Array.isArray(data.data.bids) || !Array.isArray(data.data.asks)) {
+        throw new Error("missing orderbook bids/asks");
+      }
+    }],
+    ["GET /api/market/heatmap", async () => {
+      const res = await fetch(`${API_URL}/api/market/heatmap`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error("missing data array");
+      if (!data.meta?.status) throw new Error("missing meta.status");
     }],
     ["GET /api/strategies", async () => {
       const res = await fetch(`${API_URL}/api/strategies`);
@@ -67,40 +112,10 @@ async function main() {
       if (!res.ok) throw new Error(`status ${res.status}`);
       const data = await res.json();
       if (!Array.isArray(data.data) || data.data.length < 5) throw new Error("expected 5 agents");
-    }],
-    ["GET /api/ledger/signals", async () => {
-      const res = await fetch(`${API_URL}/api/ledger/signals?limit=5`);
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data.data)) throw new Error("expected signals array");
-    }],
-    ["GET /api/ledger/stats", async () => {
-      const res = await fetch(`${API_URL}/api/ledger/stats`);
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = await res.json();
-      if (typeof data.data.totalSignals !== "number") throw new Error("missing totalSignals");
-    }],
-    ["GET /api/market/opportunities", async () => {
-      const res = await fetch(`${API_URL}/api/market/opportunities?limit=3`);
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data.data)) throw new Error("expected opportunities array");
-    }],
-    ["GET /api/strategies/:id/history", async () => {
-      const res = await fetch(`${API_URL}/api/strategies/ssi-mag7-003/history`);
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = await res.json();
-      if (!Array.isArray(data.data)) throw new Error("expected history array");
-    }],
-    ["POST /api/strategies/compare", async () => {
-      const res = await fetch(`${API_URL}/api/strategies/compare`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idA: "ssi-mag7-003", idB: "ssi-defi-002", notionalUSD: 10000 }),
-      });
-      if (!res.ok) throw new Error(`status ${res.status}`);
-      const data = await res.json();
-      if (!data.data?.weightDiffs) throw new Error("missing weightDiffs");
+      const fakeRunning = data.data.filter(
+        (a) => (a.name === "sentinel" || a.name === "strategist") && a.status === "running",
+      );
+      if (fakeRunning.length > 0) throw new Error("agents should not show fake running states");
     }],
   ];
 

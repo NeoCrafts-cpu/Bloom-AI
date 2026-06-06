@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { DollarSign, Users, Calendar, RefreshCw, ChevronDown, ChevronUp } from "lucide-react";
+import { panelStatusLabel, PANEL_STATUS_STYLES, type PanelDataStatus } from "@/lib/api";
 
 interface Investor {
   name: string;
@@ -52,21 +53,32 @@ export default function VCFundingPanel() {
   const [coin, setCoin]       = useState<Coin>("ETH");
   const [data, setData]       = useState<FundraisingData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
+  const [emptyMessage, setEmptyMessage] = useState<string | null>(null);
+  const [panelStatus, setPanelStatus] = useState<PanelDataStatus>("unavailable");
   const [expanded, setExpanded] = useState<string | null>(null);
 
   const fetchFunding = useCallback(async (c: Coin) => {
     setLoading(true);
-    setError(null);
+    setEmptyMessage(null);
     setData(null);
     try {
       const res  = await fetch(`/api/market/fundraising/${c}`);
       const json = await res.json();
-      if (res.status === 404) { setError("Fundraising data not found in SoSoValue"); return; }
-      if (!res.ok) throw new Error(json?.error ?? "Request failed");
-      setData(json?.data ?? null);
+      if (!res.ok) {
+        setPanelStatus("unavailable");
+        setEmptyMessage(json?.error ?? "Fundraising data temporarily unavailable");
+        return;
+      }
+      const metaStatus = (json?.meta?.status as PanelDataStatus | undefined) ?? "live";
+      setPanelStatus(metaStatus);
+      if (metaStatus === "empty" || !json?.data) {
+        setEmptyMessage(json?.meta?.message ?? `No SoSoValue fundraising record for ${c}`);
+        return;
+      }
+      setData(json.data);
     } catch (e) {
-      setError((e as Error).message);
+      setPanelStatus("unavailable");
+      setEmptyMessage((e as Error).message);
     } finally {
       setLoading(false);
     }
@@ -76,6 +88,7 @@ export default function VCFundingPanel() {
 
   const rounds = data?.fundraising_rounds ?? [];
   const stats  = data?.investment_stats;
+  const statusStyle = PANEL_STATUS_STYLES[panelStatus] ?? PANEL_STATUS_STYLES.unavailable;
 
   return (
     <div className="glass-card p-5">
@@ -90,6 +103,9 @@ export default function VCFundingPanel() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${statusStyle}`}>
+            {panelStatusLabel(panelStatus)}
+          </span>
           {COINS.map((c) => (
             <button
               key={c}
@@ -109,7 +125,6 @@ export default function VCFundingPanel() {
         </div>
       </div>
 
-      {/* Stats bar */}
       {stats && (
         <div className="grid grid-cols-3 gap-2 mb-4">
           {[
@@ -131,10 +146,14 @@ export default function VCFundingPanel() {
             <div key={i} className="h-16 bg-bloom-card-hover rounded-xl animate-pulse" />
           ))}
         </div>
-      ) : error ? (
-        <div className="h-24 flex items-center justify-center text-xs text-bloom-text-muted">{error}</div>
+      ) : emptyMessage ? (
+        <div className="h-24 flex items-center justify-center text-xs text-bloom-text-muted text-center px-4">
+          {emptyMessage}
+        </div>
       ) : rounds.length === 0 ? (
-        <div className="h-24 flex items-center justify-center text-xs text-bloom-text-muted">No funding rounds found</div>
+        <div className="h-24 flex items-center justify-center text-xs text-bloom-text-muted">
+          No funding rounds found
+        </div>
       ) : (
         <div className="space-y-2 max-h-72 overflow-y-auto pr-1 bloom-scroll">
           {rounds.map((r) => {

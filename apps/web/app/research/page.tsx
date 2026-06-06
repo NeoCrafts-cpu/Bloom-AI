@@ -9,6 +9,7 @@ import {
   Minus, AlertCircle, Zap,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { panelStatusLabel, type PanelDataStatus } from "@/lib/api";
 
 // Client-only components
 const PriceKlinesChart = dynamic(() => import("@/components/PriceKlinesChart"), { ssr: false });
@@ -470,8 +471,14 @@ function SentimentPanel() {
     try {
       const res  = await fetch("/api/market/sentiment");
       const json = await res.json();
+      if (!res.ok) {
+        setError(true);
+        setItems([]);
+        return;
+      }
       const data: SentimentItem[] = Array.isArray(json?.data) ? json.data : [];
       setItems(data);
+      if (data.length === 0 && json?.meta?.status !== "live") setError(true);
     } catch {
       setError(true);
     } finally {
@@ -564,17 +571,54 @@ function SentimentPanel() {
 
 export default function ResearchPage() {
   const [symbol, setSymbol]     = useState<ResearchSymbol>("BTC");
-  const [interval, setInterval] = useState<ResearchInterval>("1h");
+  const [interval, setChartInterval] = useState<ResearchInterval>("1h");
   const [tab, setTab]           = useState<TabId>("chart");
   const [aiRunning, setAiRunning] = useState(false);
-  const [apiStatus, setApiStatus] = useState<"ok" | "checking" | "error">("checking");
-  const [wsStatus]              = useState<"live" | "offline">("live");
+  const [apiStatus, setApiStatus] = useState<PanelDataStatus>("unavailable");
+  const [sosoStatus, setSosoStatus] = useState<PanelDataStatus>("unavailable");
+  const [sodexStatus, setSodexStatus] = useState<PanelDataStatus>("unavailable");
 
-  // Probe backend health
   useEffect(() => {
-    fetch("/api/market/prices")
-      .then((r) => setApiStatus(r.ok ? "ok" : "error"))
-      .catch(() => setApiStatus("error"));
+    const probe = async () => {
+      setApiStatus("unavailable");
+      try {
+        const [pricesRes, sentimentRes, klinesRes] = await Promise.all([
+          fetch("/api/market/prices"),
+          fetch("/api/market/sentiment?limit=3"),
+          fetch("/api/market/klines/BTC?interval=1h&limit=24"),
+        ]);
+        setApiStatus(pricesRes.ok ? "live" : "unavailable");
+
+        if (sentimentRes.ok) {
+          const j = await sentimentRes.json();
+          const st = j?.meta?.status as PanelDataStatus | undefined;
+          setSosoStatus(st === "live" ? "live" : st === "stale" ? "stale" : j?.data?.length ? "live" : "empty");
+        } else {
+          setSosoStatus("unavailable");
+        }
+
+        if (klinesRes.ok) {
+          const j = await klinesRes.json();
+          const st = j?.meta?.status as PanelDataStatus | undefined;
+          setSodexStatus(
+            Array.isArray(j?.data) && j.data.length > 0
+              ? "live"
+              : st === "unavailable" || st === "empty"
+                ? "offline"
+                : "empty",
+          );
+        } else {
+          setSodexStatus("unavailable");
+        }
+      } catch {
+        setApiStatus("unavailable");
+        setSosoStatus("unavailable");
+        setSodexStatus("unavailable");
+      }
+    };
+    probe();
+    const t = window.setInterval(probe, 30_000);
+    return () => window.clearInterval(t);
   }, []);
 
   const handleAiAnalysis = useCallback(async () => {
@@ -621,7 +665,7 @@ export default function ResearchPage() {
             {INTERVALS.map((ivl) => (
               <button
                 key={ivl.value}
-                onClick={() => setInterval(ivl.value)}
+                onClick={() => setChartInterval(ivl.value)}
                 className={`px-2.5 py-0.5 rounded-lg text-xs font-semibold transition-all ${
                   interval === ivl.value
                     ? "bg-emerald-500/20 text-emerald-400 border border-emerald-700/40"
@@ -691,24 +735,21 @@ export default function ResearchPage() {
 
         {/* ── Status bar ─────────────────────────────────────────────── */}
         <div className="fixed bottom-0 left-0 right-0 bg-bloom-bg/80 backdrop-blur-md border-t border-bloom-border px-6 py-2 flex items-center gap-4 text-[10px] text-bloom-text-muted z-30">
-          <span className={`flex items-center gap-1.5 ${apiStatus === "ok" ? "text-emerald-400" : apiStatus === "error" ? "text-red-400" : "text-amber-400"}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${apiStatus === "ok" ? "bg-emerald-400" : apiStatus === "error" ? "bg-red-400" : "bg-amber-400"}`} />
-            API {apiStatus === "ok" ? "connected" : apiStatus === "error" ? "error" : "checking"}
-          </span>
-          <span className="flex items-center gap-1.5 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-            WS {wsStatus}
-          </span>
-          <span className="flex items-center gap-1.5 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            SoSoValue
-          </span>
-          <span className="flex items-center gap-1.5 text-emerald-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            SoDEX
-          </span>
+          {([
+            { label: "API", status: apiStatus },
+            { label: "SoSoValue", status: sosoStatus },
+            { label: "SoDEX", status: sodexStatus },
+          ] as const).map(({ label, status }) => {
+            const isOk = status === "live" || status === "stale";
+            return (
+              <span key={label} className={`flex items-center gap-1.5 ${isOk ? "text-emerald-400" : status === "empty" ? "text-amber-400" : "text-red-400"}`}>
+                <span className={`w-1.5 h-1.5 rounded-full ${isOk ? "bg-emerald-400" : status === "empty" ? "bg-amber-400" : "bg-red-400"}`} />
+                {label} · {panelStatusLabel(status)}
+              </span>
+            );
+          })}
           <span className="ml-auto text-bloom-text-muted">
-            ● Updated {new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
+            Updated {new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" })}
           </span>
         </div>
       </main>

@@ -4,6 +4,7 @@ import {
   startJournalistAgent,
   stopJournalistAgent,
   runJournalistCycle,
+  journalistStatus,
 } from "../agents/journalist/index.js";
 import {
   startChartAnalystAgent,
@@ -12,39 +13,89 @@ import {
   chartAnalystStatus,
 } from "../agents/chartanalyst/index.js";
 
+function mapJournalistState(): AgentState {
+  const status =
+    journalistStatus.status === "error"
+      ? "error"
+      : journalistStatus.status === "running"
+        ? "running"
+        : "idle";
+  return {
+    name: "journalist",
+    status,
+    lastRun: journalistStatus.lastRun ?? undefined,
+    message:
+      journalistStatus.lastError ??
+      (status === "running"
+        ? "Polling SoSoValue Terminal API..."
+        : journalistStatus.lastRun
+          ? "Last cycle complete"
+          : "Idle — polling on interval"),
+  };
+}
+
+function mapChartAnalystState(): AgentState {
+  const status =
+    chartAnalystStatus.status === "error"
+      ? "error"
+      : chartAnalystStatus.status === "running"
+        ? "running"
+        : "idle";
+  return {
+    name: "chartanalyst",
+    status,
+    lastRun: chartAnalystStatus.lastRun ?? undefined,
+    message:
+      chartAnalystStatus.lastError ??
+      (status === "running"
+        ? "Analyzing SoDEX klines..."
+        : chartAnalystStatus.lastRun
+          ? "Last analysis complete"
+          : "Idle until next cycle"),
+  };
+}
+
 const agentStates: Record<string, AgentState> = {
-  journalist:   { name: "journalist",   status: "running", message: "Polling SoSoValue Terminal API..." },
-  chartanalyst: { name: "chartanalyst" as AgentState["name"], status: "running", message: "Monitoring SoDEX klines..." },
-  strategist:   { name: "strategist",   status: "idle" },
-  broker:       { name: "broker",       status: "idle" },
-  sentinel:     { name: "sentinel",     status: "running", message: "Monitoring all payloads" },
+  journalist: mapJournalistState(),
+  chartanalyst: mapChartAnalystState(),
+  strategist: { name: "strategist", status: "idle", message: "Idle until pipeline trigger" },
+  broker: { name: "broker", status: "idle", message: "Idle — executes on copy-trade" },
+  sentinel: { name: "sentinel", status: "idle", message: "Passive — checks on copy-trade" },
 };
+
+function syncLiveAgentStates() {
+  agentStates.journalist = mapJournalistState();
+  agentStates.chartanalyst = mapChartAnalystState();
+}
 
 export async function agentRouter(app: FastifyInstance) {
   app.get("/", async () => {
-    // Sync chartanalyst live status
-    agentStates.chartanalyst = {
-      ...agentStates.chartanalyst,
-      status: chartAnalystStatus.status === "error" ? "error" : chartAnalystStatus.status === "running" ? "running" : agentStates.chartanalyst.status,
-      lastRun: chartAnalystStatus.lastRun ?? agentStates.chartanalyst.lastRun,
-    };
+    syncLiveAgentStates();
     return { data: Object.values(agentStates) };
   });
 
-  app.post<{ Params: { name: string } }>("/:name/start", async (req, reply) => {
+  app.post<{ Params: { name: string } }>("/:name/start", async (req) => {
     const { name } = req.params;
     if (name === "journalist") {
       startJournalistAgent();
-      agentStates.journalist = { name: "journalist", status: "running", lastRun: new Date().toISOString() };
+      agentStates.journalist = mapJournalistState();
+    }
+    if (name === "chartanalyst") {
+      startChartAnalystAgent();
+      agentStates.chartanalyst = mapChartAnalystState();
     }
     return { data: agentStates[name] };
   });
 
-  app.post<{ Params: { name: string } }>("/:name/stop", async (req, reply) => {
+  app.post<{ Params: { name: string } }>("/:name/stop", async (req) => {
     const { name } = req.params;
     if (name === "journalist") {
       stopJournalistAgent();
-      agentStates.journalist = { name: "journalist", status: "paused" };
+      agentStates.journalist = { name: "journalist", status: "paused", message: "Agent paused" };
+    }
+    if (name === "chartanalyst") {
+      stopChartAnalystAgent();
+      agentStates.chartanalyst = { name: "chartanalyst", status: "paused", message: "Agent paused" };
     }
     return { data: agentStates[name] };
   });
@@ -52,49 +103,123 @@ export async function agentRouter(app: FastifyInstance) {
   app.post<{ Params: { name: string } }>("/:name/trigger", async (req, reply) => {
     const { name } = req.params;
     if (name === "journalist") {
-      agentStates.journalist = { name: "journalist", status: "running", lastRun: new Date().toISOString() };
-      const result = await runJournalistCycle();
-      agentStates.journalist.lastRun = new Date().toISOString();
-      return { data: result };
+      agentStates.journalist = { name: "journalist", status: "running", message: "Running analysis cycle..." };
+      try {
+        await runJournalistCycle();
+        agentStates.journalist = mapJournalistState();
+        return { data: agentStates.journalist };
+      } catch (err) {
+        agentStates.journalist = {
+          name: "journalist",
+          status: "error",
+          lastRun: new Date().toISOString(),
+          message: (err as Error).message,
+        };
+        return { data: agentStates.journalist };
+      }
     }
     if (name === "chartanalyst") {
-      agentStates.chartanalyst = { name: "chartanalyst" as AgentState["name"], status: "running", lastRun: new Date().toISOString() };
-      const result = await runChartAnalystCycle();
-      agentStates.chartanalyst.lastRun = new Date().toISOString();
-      return { data: result };
+      agentStates.chartanalyst = { name: "chartanalyst", status: "running", message: "Analyzing klines..." };
+      try {
+        await runChartAnalystCycle();
+        agentStates.chartanalyst = mapChartAnalystState();
+        return { data: agentStates.chartanalyst };
+      } catch (err) {
+        agentStates.chartanalyst = {
+          name: "chartanalyst",
+          status: "error",
+          lastRun: new Date().toISOString(),
+          message: (err as Error).message,
+        };
+        return { data: agentStates.chartanalyst };
+      }
     }
     return reply.code(400).send({ error: "Agent not triggerable" });
   });
 
-  // Live status for chartanalyst
   app.get("/chartanalyst/status", async () => {
     return { data: chartAnalystStatus };
   });
 
-  // Full pipeline trigger — chains all 5 agents
-  app.post("/pipeline/trigger", async (req, reply) => {
+  // Full pipeline trigger — chains all 5 agents deterministically
+  app.post("/pipeline/trigger", async () => {
     const now = new Date().toISOString();
-    agentStates.journalist  = { name: "journalist",   status: "running", lastRun: now, message: "Polling SoSoValue Terminal API..." };
-    agentStates.chartanalyst = { name: "chartanalyst" as AgentState["name"], status: "running", lastRun: now, message: "Analysing klines..." };
-    agentStates.strategist  = { name: "strategist",   status: "running", lastRun: now, message: "Generating signals..." };
-    agentStates.broker      = { name: "broker",       status: "running", lastRun: now, message: "Preparing orders..." };
-    agentStates.sentinel    = { name: "sentinel",     status: "running", lastRun: now, message: "Monitoring all payloads" };
+    agentStates.journalist = { name: "journalist", status: "running", lastRun: now, message: "Running analysis cycle..." };
+    agentStates.chartanalyst = { name: "chartanalyst", status: "running", lastRun: now, message: "Analyzing klines..." };
+    agentStates.strategist = { name: "strategist", status: "running", lastRun: now, message: "Generating signals..." };
+    agentStates.broker = { name: "broker", status: "running", lastRun: now, message: "Preparing orders..." };
+    agentStates.sentinel = { name: "sentinel", status: "running", lastRun: now, message: "Running risk checks..." };
 
-    // Run chartanalyst cycle (journalist runs on its own interval)
-    runChartAnalystCycle()
-      .then((result) => {
-        agentStates.chartanalyst.lastRun = new Date().toISOString();
-        agentStates.chartanalyst.message = result ? "Analysis complete" : "Cycle complete";
-        agentStates.strategist.lastRun   = new Date().toISOString();
-        agentStates.strategist.message   = "Signal generated";
-        agentStates.broker.lastRun       = new Date().toISOString();
-        agentStates.broker.message       = "Order queued";
-      })
-      .catch(() => {
-        agentStates.chartanalyst.status  = "error";
-        agentStates.strategist.status    = "idle";
-        agentStates.broker.status        = "idle";
-      });
+    let pipelineFailed = false;
+
+    try {
+      await runJournalistCycle();
+    } catch (err) {
+      pipelineFailed = true;
+      agentStates.journalist = {
+        name: "journalist",
+        status: "error",
+        lastRun: now,
+        message: journalistStatus.lastError ?? (err as Error).message,
+      };
+    }
+
+    if (!pipelineFailed) {
+      agentStates.journalist = mapJournalistState();
+    }
+
+    try {
+      await runChartAnalystCycle();
+      agentStates.chartanalyst = mapChartAnalystState();
+    } catch (err) {
+      pipelineFailed = true;
+      agentStates.chartanalyst = {
+        name: "chartanalyst",
+        status: "error",
+        lastRun: now,
+        message: chartAnalystStatus.lastError ?? (err as Error).message,
+      };
+    }
+
+    if (pipelineFailed || chartAnalystStatus.status === "error" || journalistStatus.status === "error") {
+      agentStates.strategist = {
+        name: "strategist",
+        status: "idle",
+        lastRun: now,
+        message: "Skipped — upstream agent error",
+      };
+      agentStates.broker = {
+        name: "broker",
+        status: "idle",
+        lastRun: now,
+        message: "No orders — pipeline incomplete",
+      };
+      agentStates.sentinel = {
+        name: "sentinel",
+        status: "idle",
+        lastRun: now,
+        message: "Monitoring only",
+      };
+    } else {
+      agentStates.strategist = {
+        name: "strategist",
+        status: "idle",
+        lastRun: now,
+        message: "Signal generated",
+      };
+      agentStates.broker = {
+        name: "broker",
+        status: "idle",
+        lastRun: now,
+        message: "Demo mode — no live execution",
+      };
+      agentStates.sentinel = {
+        name: "sentinel",
+        status: "idle",
+        lastRun: now,
+        message: "Pipeline checks passed",
+      };
+    }
 
     return { data: Object.values(agentStates) };
   });

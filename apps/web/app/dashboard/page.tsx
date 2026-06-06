@@ -13,6 +13,7 @@ import AgentStatusBar from "@/components/AgentStatusBar";
 import MarketTicker from "@/components/MarketTicker";
 import ETFFlowsPanel from "@/components/ETFFlowsPanel";
 import type { MarketSnapshot, ETFFlowData, SmartMoneyNewsletter } from "@bloom-ai/types";
+import { panelStatusLabel, PANEL_STATUS_STYLES, type PanelDataStatus } from "@/lib/api";
 
 // All new data-heavy / chart / WS components are client-only
 const PriceKlinesChart  = dynamic(() => import("@/components/PriceKlinesChart"),  { ssr: false });
@@ -26,20 +27,14 @@ const MarketHeatmap     = dynamic(() => import("@/components/MarketHeatmap"),   
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 const API = "";
 
-const MOCK_PRICES: MarketSnapshot[] = [
-  { symbol: "BTC", price: 97420, change24h: 3.2, volume24h: 38_400_000_000, marketCap: 1_920_000_000_000, updatedAt: new Date().toISOString() },
-  { symbol: "ETH", price: 3840,  change24h: 4.1, volume24h: 22_100_000_000, marketCap: 461_000_000_000,   updatedAt: new Date().toISOString() },
-  { symbol: "SOL", price: 198,   change24h: 5.7, volume24h: 8_200_000_000,  marketCap: 93_000_000_000,    updatedAt: new Date().toISOString() },
-  { symbol: "BNB", price: 612,   change24h: 1.8, volume24h: 2_900_000_000,  marketCap: 88_000_000_000,    updatedAt: new Date().toISOString() },
-  { symbol: "AVAX", price: 38.9, change24h: -1.4, volume24h: 1_200_000_000, marketCap: 16_000_000_000,   updatedAt: new Date().toISOString() },
-  { symbol: "LINK", price: 17.8, change24h: 3.9,  volume24h: 900_000_000,   marketCap: 11_000_000_000,   updatedAt: new Date().toISOString() },
-];
-
-const MOCK_ETF_FLOWS: ETFFlowData[] = [
-  { date: new Date().toISOString().slice(0, 10), ticker: "IBIT", netInflow: -27_222_000, totalAUM: 65_744_759_600, change24h: -0.04 },
-  { date: new Date().toISOString().slice(0, 10), ticker: "FBTC", netInflow: 118_000_000, totalAUM: 22_100_000_000, change24h: 0.53 },
-  { date: new Date().toISOString().slice(0, 10), ticker: "ETHA", netInflow: -4_200_000,  totalAUM: 2_800_000_000,  change24h: -0.15 },
-];
+function StatusBadge({ status }: { status: PanelDataStatus }) {
+  const style = PANEL_STATUS_STYLES[status] ?? PANEL_STATUS_STYLES.unavailable;
+  return (
+    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${style}`}>
+      {panelStatusLabel(status)}
+    </span>
+  );
+}
 
 function fmt(n: number, decimals = 2) {
   if (Math.abs(n) >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
@@ -49,25 +44,37 @@ function fmt(n: number, decimals = 2) {
 }
 
 export default function DashboardPage() {
-  const [prices, setPrices]       = useState<MarketSnapshot[]>(MOCK_PRICES);
-  const [etf, setEtf]             = useState<ETFFlowData[]>(MOCK_ETF_FLOWS);
+  const [prices, setPrices]       = useState<MarketSnapshot[]>([]);
+  const [etf, setEtf]             = useState<ETFFlowData[]>([]);
   const [newsletters, setNews]    = useState<SmartMoneyNewsletter[]>([]);
+  const [pricesStatus, setPricesStatus] = useState<PanelDataStatus>("unavailable");
+  const [etfStatus, setEtfStatus] = useState<PanelDataStatus>("unavailable");
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setRefreshing(true);
     await Promise.allSettled([
       fetch(`${API}/api/market/prices`).then(async (r) => {
-        if (!r.ok) return;
         const j = await r.json();
-        const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : null;
-        if (list?.length) setPrices(list);
+        if (!r.ok) {
+          setPricesStatus("unavailable");
+          return;
+        }
+        const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
+        setPrices(list);
+        const metaStatus = j?.meta?.status as PanelDataStatus | undefined;
+        setPricesStatus(metaStatus ?? (list.length ? "live" : "empty"));
       }),
       fetch(`${API}/api/market/etf-flows`).then(async (r) => {
-        if (!r.ok) return;
         const j = await r.json();
-        const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : null;
-        if (list?.length) setEtf(list);
+        if (!r.ok) {
+          setEtfStatus("unavailable");
+          return;
+        }
+        const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
+        setEtf(list);
+        const metaStatus = j?.meta?.status as PanelDataStatus | undefined;
+        setEtfStatus(metaStatus ?? (list.length ? "live" : "empty"));
       }),
       fetch(`${API}/api/newsletters?limit=4`).then(async (r) => {
         if (!r.ok) return;
@@ -104,7 +111,7 @@ export default function DashboardPage() {
           <div>
             <div className="pill-badge-orange mb-2 w-fit">
               <span className="live-dot" />
-              Live Markets
+              Market Dashboard
             </div>
             <h1 className="text-3xl font-bold text-bloom-text">
               Market{" "}
@@ -210,8 +217,13 @@ export default function DashboardPage() {
                 </div>
                 <h2 className="text-sm font-bold text-bloom-text">Live Crypto Prices</h2>
               </div>
-              <span className="text-xs text-bloom-text-muted">via CoinGecko</span>
+              <StatusBadge status={pricesStatus} />
             </div>
+            {prices.length === 0 ? (
+              <div className="h-40 flex items-center justify-center text-xs text-bloom-text-muted">
+                {pricesStatus === "unavailable" ? "Price data offline" : "No price data available"}
+              </div>
+            ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -258,6 +270,7 @@ export default function DashboardPage() {
                 </tbody>
               </table>
             </div>
+            )}
           </motion.div>
 
           {/* Right: ETF flows */}

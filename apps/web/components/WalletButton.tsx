@@ -4,29 +4,25 @@ import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { useState, useRef, useEffect } from "react";
 import { Wallet, ChevronDown, LogOut, Copy, CheckCircle, AlertTriangle, RefreshCw } from "lucide-react";
-
-const TARGET_CHAIN_ID  = 138565;
-const TARGET_CHAIN_HEX = "0x21D45";
-const VC_CHAIN_PARAMS  = {
-  chainId:         TARGET_CHAIN_HEX,
-  chainName:       "ValueChain Testnet",
-  nativeCurrency:  { name: "SOSO", symbol: "SOSO", decimals: 18 },
-  rpcUrls:         ["https://testnet.valuechain.xyz"],
-  blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
-};
+import { VALUECHAIN_TESTNET, VALUECHAIN_WALLET_PARAMS } from "@/lib/valuechain";
 
 async function switchToValueChain(): Promise<boolean> {
-  const eth = (window as any).ethereum as
-    | { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> }
-    | undefined;
+  const eth = (window as Window & { ethereum?: { request: (a: { method: string; params?: unknown[] }) => Promise<unknown> } }).ethereum;
   if (!eth) return false;
   try {
-    await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: TARGET_CHAIN_HEX }] });
+    await eth.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: VALUECHAIN_TESTNET.chainIdHex }],
+    });
     return true;
-  } catch (e: any) {
-    if (e?.code === 4902 || e?.code === -32603) {
+  } catch (e: unknown) {
+    const code = (e as { code?: number })?.code;
+    if (code === 4902 || code === -32603) {
       try {
-        await eth.request({ method: "wallet_addEthereumChain", params: [VC_CHAIN_PARAMS] });
+        await eth.request({
+          method: "wallet_addEthereumChain",
+          params: [VALUECHAIN_WALLET_PARAMS],
+        });
         return true;
       } catch {
         return false;
@@ -45,7 +41,7 @@ export default function WalletButton() {
   const [switching, setSwitching] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const wrongChain = isConnected && chain?.id !== TARGET_CHAIN_ID;
+  const wrongChain = isConnected && chain?.id !== VALUECHAIN_TESTNET.chainId;
 
   useEffect(() => {
     if (wrongChain && !switching) {

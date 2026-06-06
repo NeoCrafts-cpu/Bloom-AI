@@ -1,19 +1,20 @@
 import { createConfig, http, createStorage, cookieStorage } from "wagmi";
 import { injected } from "wagmi/connectors";
 import { defineChain } from "viem";
+import { VALUECHAIN_TESTNET } from "./valuechain";
 
 /** ValueChain L1 Testnet — SoDEX execution environment */
 export const valueChainTestnet = defineChain({
-  id: 138565,
-  name: "ValueChain Testnet",
-  nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
+  id: VALUECHAIN_TESTNET.chainId,
+  name: VALUECHAIN_TESTNET.chainName,
+  nativeCurrency: VALUECHAIN_TESTNET.nativeCurrency,
   rpcUrls: {
-    default: { http: ["https://testnet.valuechain.xyz"] },
+    default: { http: [...VALUECHAIN_TESTNET.rpcUrls] },
   },
   blockExplorers: {
     default: {
       name: "ValueChain Testnet Explorer",
-      url: "https://testnet-scan.valuechain.xyz",
+      url: VALUECHAIN_TESTNET.blockExplorerUrls[0],
     },
   },
 });
@@ -22,9 +23,8 @@ export const wagmiConfig = createConfig({
   chains: [valueChainTestnet],
   connectors: [injected()],
   transports: {
-    [valueChainTestnet.id]: http(),
+    [valueChainTestnet.id]: http(VALUECHAIN_TESTNET.rpcUrls[0]),
   },
   ssr: true,
-  // v3 — bump storage key again so any stale chain-138629 or v2 sessions are dropped
-  storage: createStorage({ storage: cookieStorage, key: "wagmi-vc-v3" }),
+  storage: createStorage({ storage: cookieStorage, key: "wagmi-vc-v4" }),
 });

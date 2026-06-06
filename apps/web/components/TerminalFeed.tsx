@@ -5,53 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { TrendingUp, TrendingDown, Clock, ExternalLink } from "lucide-react";
 import Link from "next/link";
 import type { SmartMoneyNewsletter } from "@bloom-ai/types";
-
-// Mock data for development when API is not running
-const MOCK_NEWSLETTERS: SmartMoneyNewsletter[] = [
-  {
-    id: "nl-001",
-    title: "Institutional Rotation into Real World Assets — Smart Money Signals",
-    summary:
-      "ETF inflow data reveals a decisive $2.4B weekly net positive flow into BTC spot ETFs, while on-chain analytics show synchronized whale accumulation. The Journalist agent detects a classic pre-rally setup.",
-    body: "",
-    narrative: "risk-on",
-    keyAssets: ["BTC", "ETH", "ONDO", "MKR"],
-    etfFlows: [
-      { date: "2026-05-09", ticker: "IBIT", netInflow: 412000000, totalAUM: 48000000000, change24h: 2.1 },
-      { date: "2026-05-09", ticker: "FBTC", netInflow: 287000000, totalAUM: 22000000000, change24h: 1.8 },
-    ],
-    sentiment: [],
-    publishedAt: new Date(Date.now() - 1800000).toISOString(),
-    strategyId: "ssi-rwa-001",
-  },
-  {
-    id: "nl-002",
-    title: "DeFi Protocol Revenue Hits ATH — DEFI.ssi Rebalance Incoming",
-    summary:
-      "On-chain data from DefiLlama shows aggregate DeFi protocol revenue crossing $980M monthly — an all-time high. The Strategist agent has triggered a rebalance of the BLOOM-DEFI index to increase weight in AAVE and GMX.",
-    body: "",
-    narrative: "risk-on",
-    keyAssets: ["AAVE", "GMX", "UNI", "COMP"],
-    etfFlows: [],
-    sentiment: [],
-    publishedAt: new Date(Date.now() - 5400000).toISOString(),
-    strategyId: "ssi-defi-002",
-  },
-  {
-    id: "nl-003",
-    title: "Macro Risk-Off Signal: Fed Minutes Trigger Sentiment Shift",
-    summary:
-      "The SoSoValue sentiment API flags a shift to bearish across 74% of monitored news sources following FOMC minutes. The Sentinel module has raised the max daily exposure limit reduction for all active copy-trade strategies.",
-    body: "",
-    narrative: "risk-off",
-    keyAssets: ["USDC", "BTC"],
-    etfFlows: [
-      { date: "2026-05-08", ticker: "IBIT", netInflow: -180000000, totalAUM: 47500000000, change24h: -1.4 },
-    ],
-    sentiment: [],
-    publishedAt: new Date(Date.now() - 10800000).toISOString(),
-  },
-];
+import { getApiBaseUrl } from "@/lib/api";
 
 const NARRATIVE_COLORS = {
   "risk-on": "text-emerald-400 bg-emerald-900/20 border-emerald-800/30",
@@ -77,40 +31,41 @@ function timeAgo(isoDate: string): string {
 }
 
 export default function TerminalFeed() {
-  const [newsletters, setNewsletters] = useState<SmartMoneyNewsletter[]>(MOCK_NEWSLETTERS);
-  const [loading, setLoading] = useState(false);
+  const [newsletters, setNewsletters] = useState<SmartMoneyNewsletter[]>([]);
+  const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<SmartMoneyNewsletter | null>(null);
-  const [isDemo, setIsDemo] = useState(true);
+  const [isDemo, setIsDemo] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchNewsletters = async () => {
+      setLoading(true);
       try {
         const res = await fetch("/api/newsletters?limit=20");
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : [];
-          if (list.length > 0) {
-            setNewsletters(list);
-            setIsDemo(false);
-            setLastUpdate(new Date());
-          }
+          setNewsletters(list);
+          setIsDemo(false);
+          setLoadError(list.length === 0 ? "No newsletters yet — run the Journalist agent" : null);
+          if (list.length > 0) setLastUpdate(new Date());
+        } else {
+          setLoadError("Newsletter feed offline");
         }
       } catch {
-        // Use mock data when API is not running
+        setLoadError("Newsletter feed offline");
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchNewsletters();
 
-    // SSE for real-time newsletter updates
-    const apiUrl =
-      typeof window !== "undefined" && window.location.hostname !== "localhost"
-        ? "https://bloom-ai-mqrb.onrender.com"
-        : "http://localhost:4000";
+    const apiUrl = getApiBaseUrl();
     let evtSource: EventSource | null = null;
     try {
-      evtSource = new EventSource(`${apiUrl}/api/newsletters/stream`);
+      evtSource = new EventSource(`${apiUrl || ""}/api/newsletters/stream`);
       evtSource.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data);
@@ -154,11 +109,13 @@ export default function TerminalFeed() {
         {/* Feed header */}
         <div className="flex items-center gap-2 mb-1">
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${
-            isDemo
+            loadError
+              ? "text-amber-400 bg-amber-900/20 border-amber-800/30"
+              : isDemo
               ? "text-amber-400 bg-amber-900/20 border-amber-800/30"
               : "text-emerald-400 bg-emerald-900/20 border-emerald-800/30"
           }`}>
-            {isDemo ? "DEMO · Mock Data" : "LIVE · Journalist Agent"}
+            {loadError ? loadError : isDemo ? "Demo sample" : "LIVE · Journalist Agent"}
           </span>
           {!isDemo && lastUpdate && (
             <span className="text-[10px] text-bloom-text-muted">
@@ -167,7 +124,12 @@ export default function TerminalFeed() {
           )}
         </div>
         <AnimatePresence initial={false}>
-          {newsletters.map((nl, i) => (
+          {newsletters.length === 0 && !loading ? (
+            <div className="glass-card p-8 text-center text-sm text-bloom-text-muted">
+              {loadError ?? "No newsletters published yet"}
+            </div>
+          ) : (
+          newsletters.map((nl, i) => (
             <motion.div
               key={nl.id}
               initial={{ opacity: 0, x: -24 }}
@@ -181,7 +143,8 @@ export default function TerminalFeed() {
                 onClick={() => setSelected(nl)}
               />
             </motion.div>
-          ))}
+          ))
+          )}
         </AnimatePresence>
       </div>
 

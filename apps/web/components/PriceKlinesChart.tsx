@@ -59,6 +59,7 @@ export default function PriceKlinesChart({
   );
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(false);
+  const [degradedMsg, setDegradedMsg] = useState<string | null>(null);
   const [lastCandle, setLastCandle] = useState<KlineBar | null>(null);
   const [showSymbols, setShowSymbols] = useState(false);
 
@@ -129,14 +130,25 @@ export default function PriceKlinesChart({
   const fetchKlines = useCallback(async (sym: ChartSymbol, ivl: ChartInterval) => {
     setLoading(true);
     setError(false);
+    setDegradedMsg(null);
     try {
       const limit = ivl === "1d" ? 90 : ivl === "4h" ? 120 : 96;
       const res = await fetch(`/api/market/klines/${sym}?interval=${ivl}&limit=${limit}`);
-      if (!res.ok) throw new Error(`${res.status}`);
       const json = await res.json();
       const bars: KlineBar[] = Array.isArray(json?.data) ? json.data : [];
+      const metaStatus = json?.meta?.status as string | undefined;
+      const metaMessage = json?.meta?.message as string | undefined;
 
-      if (candleSeriesRef.current && volSeriesRef.current && bars.length > 0) {
+      if (!res.ok) {
+        candleSeriesRef.current?.setData([]);
+        volSeriesRef.current?.setData([]);
+        setLastCandle(null);
+        setError(true);
+        setDegradedMsg(metaMessage ?? "Klines unavailable");
+        return;
+      }
+
+      if (bars.length > 0 && candleSeriesRef.current && volSeriesRef.current) {
         const candleData = bars.map((b) => ({
           time:  (Math.floor(b.time / 1000)) as UTCTimestamp,
           open:  b.open, high: b.high, low: b.low, close: b.close,
@@ -151,12 +163,24 @@ export default function PriceKlinesChart({
         volSeriesRef.current.setData(volData);
         chartRef.current?.timeScale().fitContent();
         setLastCandle(bars[bars.length - 1]);
-      } else if (bars.length === 0) {
-        // Empty response — mark as error so the overlay renders
+      } else {
+        candleSeriesRef.current?.setData([]);
+        volSeriesRef.current?.setData([]);
+        setLastCandle(null);
         setError(true);
+        setDegradedMsg(
+          metaMessage ??
+            (metaStatus === "unavailable" || metaStatus === "empty"
+              ? "SoDEX klines unavailable for this symbol/interval"
+              : "No chart data available"),
+        );
       }
     } catch {
+      candleSeriesRef.current?.setData([]);
+      volSeriesRef.current?.setData([]);
+      setLastCandle(null);
       setError(true);
+      setDegradedMsg("Failed to load klines");
     } finally {
       setLoading(false);
     }
@@ -266,7 +290,7 @@ export default function PriceKlinesChart({
         )}
         {error && !loading && (
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center gap-2">
-            <p className="text-xs text-bloom-text-muted">No chart data available</p>
+            <p className="text-xs text-bloom-text-muted">{degradedMsg ?? "No chart data available"}</p>
             <p className="text-[10px] text-bloom-text-muted opacity-60">SoDEX testnet may not have klines for this symbol/interval</p>
             <button
               onClick={() => fetchKlines(symbol, interval)}

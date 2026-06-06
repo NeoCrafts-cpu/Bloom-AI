@@ -9,6 +9,7 @@ import type { CopyTradeIntent, CopyTradeResult, SentinelReport } from "@bloom-ai
 import SentinelAlert from "./SentinelAlert";
 import OrderFeedPanel from "./OrderFeedPanel";
 import { valueChainTestnet } from "@/lib/wagmi";
+import { VALUECHAIN_TESTNET, VALUECHAIN_WALLET_PARAMS } from "@/lib/valuechain";
 
 type Step = "connect" | "configure" | "signing" | "sentinel" | "executing" | "complete" | "blocked";
 
@@ -46,6 +47,7 @@ export default function CopyTradeDashboard() {
   const [txHash, setTxHash]                 = useState<string>("");
   const [usdcBalance, setUsdcBalance]       = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
+  const [execError, setExecError]           = useState<string | null>(null);
 
   // If wallet connects externally, advance step + fetch balance
   useEffect(() => {
@@ -83,8 +85,8 @@ export default function CopyTradeDashboard() {
     setStep("signing");
 
     // Ensure MetaMask is on the right chain before signing
-    const TARGET_CHAIN_ID = 138565;
-    const TARGET_CHAIN_HEX = "0x21D45";
+    const TARGET_CHAIN_ID = VALUECHAIN_TESTNET.chainId;
+    const TARGET_CHAIN_HEX = VALUECHAIN_TESTNET.chainIdHex;
 
     if (!window.ethereum) {
       alert("MetaMask not detected.");
@@ -103,13 +105,7 @@ export default function CopyTradeDashboard() {
         try {
           await eth.request({
             method: "wallet_addEthereumChain",
-            params: [{
-              chainId: TARGET_CHAIN_HEX,
-              chainName: "ValueChain Testnet",
-              nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
-              rpcUrls: ["https://testnet.valuechain.xyz"],
-              blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
-            }],
+            params: [VALUECHAIN_WALLET_PARAMS],
           });
         } catch {
           setStep("configure");
@@ -171,6 +167,7 @@ export default function CopyTradeDashboard() {
   // -- Step: Sentinel + Execute -----------------------------------------------
   const runSentinelAndExecute = async (sig: string) => {
     setIsLoading(true);
+    setExecError(null);
     setStep("sentinel");
 
     const intent: CopyTradeIntent = {
@@ -181,7 +178,6 @@ export default function CopyTradeDashboard() {
       maxSlippageBps: slippage,
     };
 
-    // Sentinel check
     let report: SentinelReport;
     try {
       const res  = await fetch(`${API}/api/sentinel/check`, {
@@ -189,10 +185,19 @@ export default function CopyTradeDashboard() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify(intent),
       });
-      const json = res.ok ? await res.json() : null;
-      report = json?.data ?? json ?? mockSentinelReport(intent);
-    } catch {
-      report = mockSentinelReport(intent);
+      if (!res.ok) {
+        throw new Error("Sentinel check failed — API offline");
+      }
+      const json = await res.json();
+      report = json?.data ?? json;
+      if (!report?.checks) {
+        throw new Error("Invalid sentinel response");
+      }
+    } catch (err) {
+      setExecError((err as Error).message);
+      setStep("configure");
+      setIsLoading(false);
+      return;
     }
 
     setSentinelReport(report);
@@ -203,7 +208,6 @@ export default function CopyTradeDashboard() {
       return;
     }
 
-    // Execute
     setStep("executing");
     try {
       const res = await fetch(`${API}/api/broker/execute`, {
@@ -211,16 +215,21 @@ export default function CopyTradeDashboard() {
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ ...intent, userSignature: sig }),
       });
-      const json    = res.ok ? await res.json() : null;
-      const result: CopyTradeResult = json?.data ?? json ?? mockTradeResult(intent);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error((errJson as { error?: string }).error ?? "Execution failed — broker offline");
+      }
+      const json = await res.json();
+      const result: CopyTradeResult = json?.data ?? json;
+      if (!result?.orders) {
+        throw new Error("Invalid execution response");
+      }
       setTradeResult(result);
-      // Generate a fake testnet tx hash for demo
-      setTxHash(`0x${sig.slice(2, 66)}`);
+      setTxHash(result.orders[0]?.orderId ? `0x${result.orders[0].orderId.slice(0, 64)}` : "");
       setStep("complete");
-    } catch {
-      setTradeResult(mockTradeResult(intent));
-      setTxHash(`0x${sig.slice(2, 66)}`);
-      setStep("complete");
+    } catch (err) {
+      setExecError((err as Error).message);
+      setStep("configure");
     } finally {
       setIsLoading(false);
     }
@@ -235,28 +244,19 @@ export default function CopyTradeDashboard() {
     }
     const eth = window.ethereum as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
     try {
-      // Try switching first (works if already added)
       await eth.request({
         method: "wallet_switchEthereumChain",
-        params: [{ chainId: "0x21D85" }],
+        params: [{ chainId: VALUECHAIN_TESTNET.chainIdHex }],
       });
     } catch (switchErr: unknown) {
-      // Error code 4902 = chain not added yet
       if ((switchErr as { code?: number })?.code === 4902) {
         try {
           await eth.request({
             method: "wallet_addEthereumChain",
-            params: [{
-              chainId: "0x21D45",
-              chainName: "ValueChain Testnet",
-              nativeCurrency: { name: "SOSO", symbol: "SOSO", decimals: 18 },
-              rpcUrls: ["https://testnet.valuechain.xyz"],
-              blockExplorerUrls: ["https://testnet-scan.valuechain.xyz"],
-            }],
+            params: [VALUECHAIN_WALLET_PARAMS],
           });
         } catch { /* user rejected add */ }
       }
-      // else: user rejected switch — do nothing
     }
   };
   const reset = () => {
@@ -265,6 +265,7 @@ export default function CopyTradeDashboard() {
     setTradeResult(null);
     setUserSignature("");
     setTxHash("");
+    setExecError(null);
   };
 
   return (
@@ -402,6 +403,11 @@ export default function CopyTradeDashboard() {
               {usdcBalance !== null && usdcBalance < allocation && (
                 <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
                   Insufficient USDC balance. Reduce allocation or deposit USDC to SoDEX.
+                </div>
+              )}
+              {execError && (
+                <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
+                  {execError}
                 </div>
               )}
               <button onClick={signAuthorization}
@@ -555,34 +561,4 @@ function StepCard({
       {(active || completed) && children}
     </div>
   );
-}
-
-// --- Mock fallbacks -----------------------------------------------------------
-
-function mockSentinelReport(intent: CopyTradeIntent): SentinelReport {
-  return {
-    intentId: `intent-${Date.now()}`,
-    passed: true,
-    checks: [
-      { rule: "Max Single Quantity",   passed: true,                            actual: intent.allocationUSD,  limit: 50000 },
-      { rule: "Max Slippage",          passed: intent.maxSlippageBps <= 150, actual: intent.maxSlippageBps, limit: 150,
-        message: intent.maxSlippageBps > 150 ? "Slippage too high" : undefined },
-      { rule: "Daily Exposure Limit",  passed: true,                            actual: intent.allocationUSD,  limit: 100000 },
-      { rule: "Whitelisted Contracts", passed: true,                            actual: "All whitelisted",      limit: "Whitelist" },
-    ],
-    timestamp: new Date().toISOString(),
-  };
-}
-
-function mockTradeResult(intent: CopyTradeIntent): CopyTradeResult {
-  return {
-    intentId: `intent-${Date.now()}`,
-    sentinelStatus: "passed",
-    orders: [
-      { orderId: `ord-${Date.now()}-1`, clOrdID: "bloom-1", symbol: "BTC_USDC", side: 1, fillPrice: 68420, fillQuantity: 0.001, status: "filled", timestamp: new Date().toISOString() },
-      { orderId: `ord-${Date.now()}-2`, clOrdID: "bloom-2", symbol: "ETH_USDC", side: 1, fillPrice: 3812,  fillQuantity: 0.01,  status: "filled", timestamp: new Date().toISOString() },
-    ],
-    totalExecutedUSD: intent.allocationUSD,
-    timestamp: new Date().toISOString(),
-  };
 }

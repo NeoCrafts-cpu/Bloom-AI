@@ -9,7 +9,7 @@ import { copyTradeRouter } from "./routes/copyTrade.js";
 import { marketRouter } from "./routes/market.js";
 import { agentRouter } from "./routes/agents.js";
 import { mcpRouter } from "./routes/mcp.js";
-import { startJournalistAgent, journalistStatus } from "./agents/journalist/index.js";
+import { startJournalistAgent } from "./agents/journalist/index.js";
 import { startChartAnalystAgent } from "./agents/chartanalyst/index.js";
 import { wsManager } from "./ws/manager.js";
 
@@ -118,24 +118,8 @@ app.get("/ws", { websocket: true }, (socket) => {
 });
 
 app.get("/health", async () => {
-  const { newsletterStore } = await import("./store/newsletter.js");
-  const newsletters = newsletterStore.getAll();
-  return {
-    status: "ok",
-    ts: Date.now(),
-    journalist: {
-      status: journalistStatus.status,
-      lastRun: journalistStatus.lastRun,
-      lastError: journalistStatus.lastError,
-      cycleCount: journalistStatus.cycleCount,
-      newsletterCount: newsletters.length,
-    },
-    env: {
-      openrouter: !!config.OPENROUTER_API_KEY,
-      sosovalue: !!process.env.SOSOVALUE_API_KEY,
-      sodexPrivateKey: !!process.env.SODEX_API_PRIVATE_KEY,
-    },
-  };
+  const { getHealthReport } = await import("./lib/health.js");
+  return getHealthReport();
 });
 
 // Start

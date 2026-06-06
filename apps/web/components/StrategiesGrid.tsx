@@ -107,27 +107,58 @@ const PERF_MOCK: Record<string, number> = {
 };
 
 export default function StrategiesGrid() {
-  const [strategies, setStrategies] = useState<SSIIndex[]>(MOCK_STRATEGIES);
+  const [strategies, setStrategies] = useState<SSIIndex[]>([]);
+  const [isDemo, setIsDemo] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchStrategies = async () => {
+      setLoading(true);
       try {
-        const res = await fetch(
-          "/api/strategies"
-        );
+        const res = await fetch("/api/strategies");
         if (res.ok) {
           const data = await res.json();
           const list = Array.isArray(data?.data) ? data.data : Array.isArray(data) ? data : null;
-          if (list) setStrategies(list);
+          if (list && list.length > 0) {
+            setStrategies(list);
+            setIsDemo(false);
+          } else {
+            setStrategies(MOCK_STRATEGIES);
+            setIsDemo(true);
+          }
+        } else {
+          setStrategies(MOCK_STRATEGIES);
+          setIsDemo(true);
         }
       } catch {
-        // Use mock
+        setStrategies(MOCK_STRATEGIES);
+        setIsDemo(true);
+      } finally {
+        setLoading(false);
       }
     };
     fetchStrategies();
   }, []);
 
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="glass-card p-6 h-64 shimmer" />
+        ))}
+      </div>
+    );
+  }
+
   return (
+    <div>
+      {isDemo && (
+        <div className="mb-4">
+          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border text-amber-400 bg-amber-900/20 border-amber-800/30">
+            Demo sample · API offline or empty
+          </span>
+        </div>
+      )}
     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
       {strategies.map((strategy, i) => {
         const perf     = PERF_MOCK[strategy.id] ?? 0;
@@ -229,6 +260,7 @@ export default function StrategiesGrid() {
           </motion.div>
         );
       })}
+    </div>
     </div>
   );
 }
