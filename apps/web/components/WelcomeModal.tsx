@@ -8,45 +8,45 @@ const STORAGE_KEY = "bloom-welcome-dismissed";
 
 const WAVES = [
   {
-    label: "Wave 1 — Complete ✓",
+    label: "Phase 1–2 — Complete ✓",
     color: "text-emerald-400",
     dot: "bg-emerald-400",
     items: [
-      "Journalist Agent: AI-generated Smart Money newsletters",
-      "Strategist Agent: live SSI index creation from macro narrative",
-      "Broker Agent: EIP-712 copy-trade execution on SoDEX",
-      "Sentinel Agent: deterministic risk circuit-breaker",
-      "WebGL VideoBackground + glass-morphism UI",
+      "Five-agent pipeline: Journalist → Chart Analyst → Strategist → Sentinel → Broker",
+      "SoSoValue ETF/news + SoDEX tickers, klines, orderbook",
+      "Pipeline-generated SSI indices (no static seed catalog)",
+      "EIP-712 copy-trade on SoDEX testnet with Sentinel risk gate",
+      "Verified Signal Ledger + Opportunity Discovery",
     ],
   },
   {
-    label: "Wave 2 — Coming Soon",
+    label: "Phase 3 — Intelligence",
     color: "text-bloom-orange",
     dot: "bg-bloom-orange",
     items: [
-      "On-chain reputation score for strategy creators",
-      "Multi-strategy portfolio auto-rebalancing",
-      "Real-time Sentinel alerts via push notifications",
-      "Mobile app with 1-tap copy trading",
+      "SoSoValue Index / Macro / Treasuries / Crypto Stocks depth",
+      "Alerts for ETF spikes, RSI extremes, opportunity scores",
+      "Index Publisher Studio with rebalance history",
+      "Mark-to-market PnL from verified fills",
     ],
   },
   {
-    label: "Wave 3 — Roadmap",
+    label: "Phase 4 — Mainnet & Ecosystem",
     color: "text-bloom-text-muted",
     dot: "bg-bloom-text-muted",
     items: [
-      "ValueChain Mainnet deployment (chain ID 286623)",
-      "Cross-chain bridging via Mirror Protocol",
-      "Privacy-preserving credit reports",
-      "DAO governance for strategy whitelisting",
+      "SoDEX / ValueChain mainnet (chain ID 286623)",
+      "Social copy profiles and subscriber leaderboard",
+      "Perps copy-trade with leverage caps",
+      "DAO governance for Sentinel rule changes",
     ],
   },
 ];
 
 const FEATURES = [
-  { icon: Brain,  title: "AI Newsletter",   desc: "Claude 3.5 analyses ETF flows + sentiment every 10 min" },
-  { icon: Layers, title: "Copy Strategies", desc: "3 on-chain indices: BLOOM-RWA, BLOOM-DEFI, BLOOM-MAG7" },
-  { icon: Zap,    title: "Live Execution",  desc: "Real spot orders on SoDEX testnet via EIP-712 signatures" },
+  { icon: Brain,  title: "AI Newsletter",   desc: "SoSoValue ETF flows + sentiment → Smart Money Terminal" },
+  { icon: Layers, title: "Copy Strategies", desc: "Pipeline-generated SSI indices with live SoDEX prices" },
+  { icon: Zap,    title: "Live Execution",  desc: "User-confirmed EIP-712 orders on SoDEX testnet" },
   { icon: Shield, title: "Risk Sentinel",   desc: "Blocks trades that exceed slippage, size, or daily limits" },
 ];
 

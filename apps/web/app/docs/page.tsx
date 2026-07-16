@@ -208,7 +208,7 @@ npm install
 
 # 2. Configure environment
 cp apps/api/.env.example apps/api/.env
-# Fill in: SOSOVALUE_API_KEY, SODEX_API_PRIVATE_KEY, OPENROUTER_API_KEY
+# Fill in: SOSOVALUE_API_KEY, SODEX_API_KEY_NAME, SODEX_API_PRIVATE_KEY, OPENROUTER_API_KEY
 
 # 3. Start the API server (port 4000)
 cd apps/api && npx tsx src/index.ts

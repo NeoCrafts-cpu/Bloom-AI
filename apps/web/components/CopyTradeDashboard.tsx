@@ -28,7 +28,7 @@ const API = "";
 
 export default function CopyTradeDashboard() {
   const searchParams = useSearchParams();
-  const strategyId = searchParams?.get("strategy") ?? "ssi-mag7-003";
+  const strategyId = searchParams?.get("strategy") ?? "";
 
   // -- Wagmi hooks ------------------------------------------------------------
   const { address, isConnected, chain } = useAccount();
@@ -40,6 +40,8 @@ export default function CopyTradeDashboard() {
   const [step, setStep]                     = useState<Step>("connect");
   const [allocation, setAllocation]         = useState<number>(100);
   const [slippage, setSlippage]             = useState<number>(50); // bps
+  const [venue, setVenue]                   = useState<"spot" | "perps">("spot");
+  const [leverage, setLeverage]             = useState<number>(1);
   const [sentinelReport, setSentinelReport] = useState<SentinelReport | null>(null);
   const [tradeResult, setTradeResult]       = useState<CopyTradeResult | null>(null);
   const [isLoading, setIsLoading]           = useState(false);
@@ -81,6 +83,11 @@ export default function CopyTradeDashboard() {
   // -- Step: Sign trade authorization with MetaMask ---------------------------
   const signAuthorization = async () => {
     if (!address) return;
+    if (!strategyId) {
+      setExecError("Choose a pipeline-generated strategy before copy trading.");
+      setStep("configure");
+      return;
+    }
     setIsLoading(true);
     setStep("signing");
 
@@ -150,7 +157,7 @@ export default function CopyTradeDashboard() {
       });
 
       setUserSignature(sig);
-      await runSentinelAndExecute(sig);
+      await runSentinelAndExecute(sig, Number(deadline));
     } catch (err) {
       // User rejected signing or chain mismatch
       const msg = String((err as Error)?.message ?? err);
@@ -165,7 +172,7 @@ export default function CopyTradeDashboard() {
   };
 
   // -- Step: Sentinel + Execute -----------------------------------------------
-  const runSentinelAndExecute = async (sig: string) => {
+  const runSentinelAndExecute = async (sig: string, deadline: number) => {
     setIsLoading(true);
     setExecError(null);
     setStep("sentinel");
@@ -176,6 +183,10 @@ export default function CopyTradeDashboard() {
       userAddress:    address ?? "0x0000000000000000000000000000000000000000",
       allocationUSD:  allocation,
       maxSlippageBps: slippage,
+      deadline,
+      userSignature: sig,
+      venue,
+      leverage: venue === "perps" ? leverage : undefined,
     };
 
     let report: SentinelReport;
@@ -213,7 +224,7 @@ export default function CopyTradeDashboard() {
       const res = await fetch(`${API}/api/broker/execute`, {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ ...intent, userSignature: sig }),
+        body:    JSON.stringify(intent),
       });
       if (!res.ok) {
         const errJson = await res.json().catch(() => ({}));
@@ -328,7 +339,14 @@ export default function CopyTradeDashboard() {
             <div className="space-y-5">
               <div className="glass-card p-4 border-bloom-border-hover">
                 <p className="text-xs text-bloom-text-muted mb-1 uppercase tracking-wider font-semibold">Strategy</p>
-                <p className="text-sm font-bold text-bloom-orange">{strategyId.toUpperCase()}</p>
+                <p className="text-sm font-bold text-bloom-orange">
+                  {strategyId ? strategyId.toUpperCase() : "NO STRATEGY SELECTED"}
+                </p>
+                {!strategyId && (
+                  <p className="text-xs text-bloom-text-muted mt-2">
+                    Run the agent pipeline, then open copy trade from a generated strategy.
+                  </p>
+                )}
               </div>
               {/* Allocation guidance — conservative defaults, no fabricated win rates */}
               <div className="glass-card p-4 border border-bloom-border-hover bg-gradient-to-br from-amber-950/20 to-bloom-bg-2/60">
@@ -390,6 +408,46 @@ export default function CopyTradeDashboard() {
                   </span>
                 </div>
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
+                  Venue
+                </label>
+                <div className="flex gap-2">
+                  {(["spot", "perps"] as const).map((v) => (
+                    <button
+                      key={v}
+                      type="button"
+                      onClick={() => setVenue(v)}
+                      className={`text-xs px-3 py-1.5 rounded-full border capitalize ${
+                        venue === v
+                          ? "border-bloom-border-hover bg-bloom-orange-dim text-bloom-orange"
+                          : "border-bloom-border text-bloom-text-muted"
+                      }`}
+                    >
+                      {v}
+                    </button>
+                  ))}
+                </div>
+                {venue === "perps" && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
+                      Leverage: {leverage}x
+                    </label>
+                    <input
+                      type="range"
+                      min={1}
+                      max={3}
+                      step={1}
+                      value={leverage}
+                      onChange={(e) => setLeverage(Number(e.target.value))}
+                      className="w-full accent-bloom-orange"
+                    />
+                    <p className="text-[10px] text-amber-400 mt-1">
+                      Requires SODEX_ENABLE_PERPS_COPY=1 on the API — Sentinel enforces max leverage.
+                    </p>
+                  </div>
+                )}
+              </div>
               {usdcBalance !== null && usdcBalance < allocation && (
                 <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
                   Insufficient USDC balance. Reduce allocation or deposit USDC to SoDEX.
@@ -401,7 +459,7 @@ export default function CopyTradeDashboard() {
                 </div>
               )}
               <button onClick={signAuthorization}
-                disabled={isLoading || (usdcBalance !== null && usdcBalance < allocation)}
+                disabled={isLoading || !strategyId || (usdcBalance !== null && usdcBalance < allocation)}
                 className="orange-btn flex items-center gap-2 text-sm disabled:opacity-50">
                 <Shield size={14} />
                 Sign & Execute via MetaMask

@@ -14,6 +14,9 @@ import { panelStatusLabel, type PanelDataStatus } from "@/lib/api";
 // Client-only components
 const PriceKlinesChart = dynamic(() => import("@/components/PriceKlinesChart"), { ssr: false });
 const LiveOrderBook    = dynamic(() => import("@/components/LiveOrderBook"),    { ssr: false });
+const InstitutionalDataPanel = dynamic(() => import("@/components/InstitutionalDataPanel"), { ssr: false });
+const AlertsPanel = dynamic(() => import("@/components/AlertsPanel"), { ssr: false });
+const OpportunityFeedPanel = dynamic(() => import("@/components/OpportunityFeedPanel"), { ssr: false });
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -66,6 +69,8 @@ const TABS = [
   { id: "orderbook",   label: "Orderbook",   icon: BookOpen      },
   { id: "confluence",  label: "Confluence",  icon: GitMerge      },
   { id: "sentiment",   label: "Sentiment",   icon: Newspaper     },
+  { id: "institutional", label: "Institutional", icon: Activity },
+  { id: "opportunities", label: "Opportunities", icon: Zap },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
 
@@ -775,6 +780,13 @@ export default function ResearchPage() {
             {tab === "orderbook" && <LiveOrderBook />}
             {tab === "confluence" && <ConfluencePanel symbol={symbol} interval={interval} />}
             {tab === "sentiment" && <SentimentPanel />}
+            {tab === "institutional" && (
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                <InstitutionalDataPanel />
+                <AlertsPanel />
+              </div>
+            )}
+            {tab === "opportunities" && <OpportunityFeedPanel limit={12} />}
           </motion.div>
         </AnimatePresence>
 

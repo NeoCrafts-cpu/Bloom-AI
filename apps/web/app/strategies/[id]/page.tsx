@@ -16,11 +16,12 @@ function StrategyDetailContent() {
   const id = params?.id as string;
 
   const [strategy, setStrategy] = useState<SSIIndex | null>(null);
+  const [strategies, setStrategies] = useState<SSIIndex[]>([]);
   const [history, setHistory] = useState<SSIRebalanceEvent[]>([]);
   const [tradability, setTradability] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [compareId, setCompareId] = useState("ssi-mag7-003");
+  const [compareId, setCompareId] = useState("");
   const [comparison, setComparison] = useState<IndexComparison | null>(null);
   const [rebalanceReason, setRebalanceReason] = useState("");
   const [rebalancing, setRebalancing] = useState(false);
@@ -36,6 +37,14 @@ function StrategyDetailContent() {
       setStrategy(json?.data?.strategy ?? null);
       setHistory(Array.isArray(json?.data?.history) ? json.data.history : []);
       setTradability(json?.data?.tradability ?? {});
+      const listRes = await fetch("/api/strategies");
+      if (listRes.ok) {
+        const listJson = await listRes.json();
+        const list = Array.isArray(listJson?.data) ? listJson.data : [];
+        setStrategies(list);
+        const firstOther = list.find((s: SSIIndex) => s.id !== id);
+        setCompareId((current) => current || firstOther?.id || "");
+      }
     } catch {
       setError(true);
     } finally {
@@ -46,6 +55,7 @@ function StrategyDetailContent() {
   useEffect(() => { fetchStrategy(); }, [fetchStrategy]);
 
   const runCompare = async () => {
+    if (!compareId) return;
     try {
       const res = await fetch("/api/strategies/compare", {
         method: "POST",
@@ -211,11 +221,12 @@ function StrategyDetailContent() {
                 onChange={(e) => setCompareId(e.target.value)}
                 className="w-full bg-bloom-bg border border-bloom-border rounded-xl px-3 py-2 text-xs text-bloom-text mb-3"
               >
-                <option value="ssi-mag7-003">BLOOM-MAG7</option>
-                <option value="ssi-defi-002">BLOOM-DEFI</option>
-                <option value="ssi-rwa-001">BLOOM-RWA</option>
+                <option value="">Select another strategy</option>
+                {strategies.filter((s) => s.id !== id).map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
               </select>
-              <button onClick={runCompare} className="orange-btn-outline text-xs w-full py-2 flex items-center justify-center gap-1">
+              <button onClick={runCompare} disabled={!compareId} className="orange-btn-outline text-xs w-full py-2 flex items-center justify-center gap-1 disabled:opacity-50">
                 Compare @ $10k
               </button>
               {comparison && (

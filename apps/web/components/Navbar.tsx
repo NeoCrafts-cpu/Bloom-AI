@@ -14,6 +14,8 @@ const NAV_LINKS = [
   { label: "Terminal",     href: "/terminal"     },
   { label: "Strategies",  href: "/strategies"   },
   { label: "Copy Trade",  href: "/copy-trade"   },
+  { label: "Ledger",      href: "/ledger"       },
+  { label: "Social",      href: "/leaderboard"  },
   { label: "Performance", href: "/performance"  },
   { label: "Dashboard",   href: "/dashboard"    },
   { label: "Docs",        href: "/docs"         },

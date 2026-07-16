@@ -56,8 +56,14 @@ function StudioContent() {
   }, [editId, loadExisting]);
 
   useEffect(() => {
-    fetch("/api/strategies/ssi-mag7-003")
+    fetch("/api/strategies")
       .then((r) => r.json())
+      .then((j) => {
+        const first = Array.isArray(j?.data) ? j.data[0] : null;
+        if (!first?.id) return;
+        return fetch(`/api/strategies/${first.id}`);
+      })
+      .then((r) => r?.json())
       .then((j) => {
         const t = j?.data?.tradability;
         if (t && typeof t === "object") setTradability(t);

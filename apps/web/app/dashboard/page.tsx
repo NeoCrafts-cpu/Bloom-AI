@@ -23,6 +23,8 @@ const PerpsPositionsPanel = dynamic(() => import("@/components/PerpsPositionsPan
 const VCFundingPanel    = dynamic(() => import("@/components/VCFundingPanel"),    { ssr: false });
 const LiveOrderBook     = dynamic(() => import("@/components/LiveOrderBook"),     { ssr: false });
 const MarketHeatmap     = dynamic(() => import("@/components/MarketHeatmap"),     { ssr: false });
+const OpportunityFeedPanel = dynamic(() => import("@/components/OpportunityFeedPanel"), { ssr: false });
+const AlertsPanel = dynamic(() => import("@/components/AlertsPanel"), { ssr: false });
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 const API = "";
@@ -399,8 +401,9 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Row 2: ETF History + Market Heatmap */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 mb-5">
+          {/* Row 2: Opportunity discovery + ETF History + Market Heatmap */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
+            <OpportunityFeedPanel compact limit={6} className="xl:col-span-1" />
             <ETFHistoryChart />
             <MarketHeatmap />
           </div>
@@ -410,10 +413,11 @@ export default function DashboardPage() {
             <LiveOrderBook />
           </div>
 
-          {/* Row 4: Perps Positions + VC Funding */}
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+          {/* Row 4: Perps Positions + VC Funding + Alerts */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
             <PerpsPositionsPanel />
             <VCFundingPanel />
+            <AlertsPanel />
           </div>
         </motion.div>
 
