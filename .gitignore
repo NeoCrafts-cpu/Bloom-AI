@@ -29,3 +29,8 @@ Thumbs.db
 
 # TypeScript
 *.tsbuildinfo
+
+# Runtime data
+apps/.data/
+.data/
+

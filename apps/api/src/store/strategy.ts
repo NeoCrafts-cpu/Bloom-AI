@@ -12,7 +12,7 @@ const DATA_DIR = process.env.BLOOM_DATA_DIR ?? join(__dirname, "../../../.data")
 const STRATEGIES_FILE = join(DATA_DIR, "strategies.json");
 const HISTORY_FILE = join(DATA_DIR, "rebalance-history.json");
 
-const SEED_STRATEGIES: SSIIndex[] = [
+const LEGACY_SEED_STRATEGIES: SSIIndex[] = [
   {
     id: "ssi-mag7-003",
     name: "BLOOM-MAG7",
@@ -99,7 +99,7 @@ export function validateWeights(assets: SSIAssetWeight[]): { valid: boolean; sum
 }
 
 class StrategyStore {
-  private strategies: SSIIndex[] = loadJson<SSIIndex[]>(STRATEGIES_FILE, SEED_STRATEGIES);
+  private strategies: SSIIndex[] = loadJson<SSIIndex[]>(STRATEGIES_FILE, []);
   private history: SSIRebalanceEvent[] = loadJson<SSIRebalanceEvent[]>(HISTORY_FILE, []);
 
   private persist(): void {
@@ -113,6 +113,10 @@ class StrategyStore {
 
   getById(id: string): SSIIndex | undefined {
     return this.strategies.find((s) => s.id === id);
+  }
+
+  getFallbackTemplate(): SSIIndex | undefined {
+    return this.strategies[0] ?? LEGACY_SEED_STRATEGIES[0];
   }
 
   add(strategy: SSIIndex): void {
@@ -199,7 +203,7 @@ class StrategyStore {
   }
 
   async getWithLivePrices(id: string): Promise<SSIIndex | undefined> {
-    const template = this.getById(id) ?? this.getById("ssi-mag7-003");
+    const template = this.getById(id);
     if (!template) return undefined;
 
     const marketResult = await getMarketSnapshots().catch(() => null);

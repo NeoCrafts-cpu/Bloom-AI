@@ -2,13 +2,18 @@ import { v4 as uuid } from "uuid";
 import type { CopyTradeIntent, CopyTradeResult, OrderFill, SSIIndex } from "@bloom-ai/types";
 import {
   placeBatchSpotOrders,
+  placeBatchPerpsOrders,
   getAccountState,
+  getPerpsAccountState,
   getSymbolIdMap,
   getOrderHistory,
+  updatePerpsLeverage,
 } from "../../services/sodex.js";
 import { getMarketSnapshots } from "../../services/sosovalue.js";
 import { strategyStore } from "../strategist/index.js";
 import { wsManager } from "../../ws/manager.js";
+import { config } from "../../config.js";
+import { signalLedger } from "../../store/signalLedger.js";
 
 export let brokerStatus: {
   status: "running" | "idle" | "error";
@@ -39,12 +44,24 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
   const intentId = uuid();
 
   try {
+  const usePerps = intent.venue === "perps";
+  if (usePerps && !config.SODEX_ENABLE_PERPS_COPY) {
+    throw new Error("Perps copy-trade disabled — set SODEX_ENABLE_PERPS_COPY=1");
+  }
+  if (config.SODEX_NETWORK === "mainnet" && !intent.userSignature) {
+    throw new Error("Mainnet execution requires explicit user signature");
+  }
+
   let accountID = 0;
   if (intent.userAddress && intent.userAddress !== "0x0000000000000000000000000000000000000000") {
-    const accountState = await getAccountState(intent.userAddress);
-    if (accountState?.accountID) {
-      accountID = accountState.accountID;
+    const accountState = usePerps
+      ? await getPerpsAccountState(intent.userAddress)
+      : await getAccountState(intent.userAddress);
+    if (accountState && "accountID" in accountState && accountState.accountID) {
+      accountID = accountState.accountID as number;
       console.log(`[Broker] Resolved accountID=${accountID} for ${intent.userAddress}`);
+    } else if (accountState && "aid" in (accountState as object)) {
+      accountID = Number((accountState as { aid?: number }).aid ?? 0);
     } else {
       console.warn(`[Broker] Could not resolve accountID for ${intent.userAddress} — using 0`);
     }
@@ -101,15 +118,33 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     });
 
     try {
-      const rawFills = await placeBatchSpotOrders(accountID, symbolID, [
-        {
-          clOrdID,
-          side: 1 as const,    // buy
-          type: 2 as const,    // market
-          timeInForce: 2 as const, // IOC
-          funds: fundsDecimal,
-        },
-      ]);
+      let rawFills: { clOrdID: string; status: string; message?: string }[];
+      if (usePerps) {
+        const lev = Math.min(intent.leverage ?? 1, config.SENTINEL_MAX_LEVERAGE);
+        await updatePerpsLeverage(accountID, symbolID, lev).catch(() => null);
+        rawFills = (await placeBatchPerpsOrders(accountID, symbolID, [
+          {
+            clOrdID,
+            modifier: 1,
+            side: 1,
+            type: 2,
+            timeInForce: 3,
+            quantity: (price > 0 ? assetAllocation / price : 0).toFixed(6),
+            reduceOnly: false,
+            positionSide: 1,
+          },
+        ])) as { clOrdID: string; status: string; message?: string }[];
+      } else {
+        rawFills = await placeBatchSpotOrders(accountID, symbolID, [
+          {
+            clOrdID,
+            side: 1 as const,
+            type: 2 as const,
+            timeInForce: 2 as const,
+            funds: fundsDecimal,
+          },
+        ]);
+      }
 
       for (const raw of rawFills) {
         const isSimulated = raw.message?.includes("Simulated") || raw.message?.includes("configure");
@@ -126,7 +161,7 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
         fills.push(fill);
         wsManager.broadcast({
           type: "ORDER_FILL",
-          payload: { ...fill, simulated: isSimulated },
+          payload: { ...fill, simulated: isSimulated, venue: usePerps ? "perps" : "spot" },
           timestamp: new Date().toISOString(),
         });
       }
@@ -164,6 +199,20 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
   brokerStatus.lastRun = new Date().toISOString();
   brokerStatus.lastMessage = `Executed ${fills.length} orders for $${totalExecuted.toFixed(2)} — Account #${accountID}`;
   brokerStatus.cycleCount++;
+
+  if (intent.signalId) {
+    signalLedger.recordExecution({
+      signalId: intent.signalId,
+      tradeId: intentId,
+      strategyId: intent.strategyId,
+      userAddress: intent.userAddress,
+      allocationUSD: intent.allocationUSD,
+      newsletterId: intent.newsletterId,
+      simulated: !config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME,
+      userSignature: intent.userSignature,
+      totalExecutedUSD: totalExecuted,
+    });
+  }
 
   wsManager.broadcast({
     type: "AGENT_STATUS",

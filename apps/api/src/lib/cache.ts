@@ -84,4 +84,10 @@ export const TTL = {
   PERPS_ACCOUNT:      30 * 1000,   // 30s
   MARK_PRICES:        15 * 1000,   // 15s
   HEATMAP:         5 * 60 * 1000,  // 5 min
+  SOSO_INDEX:     10 * 60 * 1000,  // 10 min
+  MACRO_EVENTS:   15 * 60 * 1000,  // 15 min
+  BTC_TREASURY:   30 * 60 * 1000,  // 30 min
+  CRYPTO_STOCKS:  10 * 60 * 1000,  // 10 min
+  ANALYSIS_CHARTS: 15 * 60 * 1000, // 15 min
+  COINGLASS:       5 * 60 * 1000,  // 5 min
 } as const;

@@ -10,9 +10,13 @@ import {
   getNewsSentiment,
   getMarketSnapshots,
   getKlines,
+  getMacroEvents,
+  hasNearTermMacroRisk,
+  getBtcTreasuries,
 } from "../services/sosovalue.js";
 import { getSymbolIdMap } from "../services/sodex.js";
 import { computeTAMetrics, taScore } from "../lib/ta.js";
+import { getDerivativesMetrics } from "./coinglass.js";
 import { signalLedger } from "../store/signalLedger.js";
 import { config } from "../config.js";
 
@@ -34,11 +38,13 @@ function aggregateNewsSentiment(
 }
 
 export async function runOpportunityScan(recordToLedger = true): Promise<OpportunityScore[]> {
-  const [etfResult, sentimentResult, marketsResult, symbolMap] = await Promise.all([
+  const [etfResult, sentimentResult, marketsResult, symbolMap, macroResult, treasuryResult] = await Promise.all([
     getETFFlows().catch(() => null),
     getNewsSentiment(20).catch(() => null),
     getMarketSnapshots().catch(() => null),
     getSymbolIdMap().catch(() => ({} as Record<string, number>)),
+    getMacroEvents().catch(() => null),
+    getBtcTreasuries().catch(() => null),
   ]);
 
   const etfFlows = etfResult?.data ?? [];
@@ -46,6 +52,8 @@ export async function runOpportunityScan(recordToLedger = true): Promise<Opportu
   const markets = marketsResult?.data ?? [];
   const totalEtfInflow = etfFlows.reduce((s, f) => s + f.netInflow, 0);
   const macroBias = totalEtfInflow > 100_000_000 ? 1 : totalEtfInflow < -50_000_000 ? -1 : 0;
+  const eventRisk = hasNearTermMacroRisk(macroResult?.data ?? []);
+  const treasuryBias = (treasuryResult?.data?.length ?? 0) > 0 ? 1 : 0;
 
   const priceMap = Object.fromEntries(markets.map((m) => [m.symbol, m]));
   const opportunities: OpportunityScore[] = [];
@@ -143,6 +151,66 @@ export async function runOpportunityScan(recordToLedger = true): Promise<Opportu
       }
     } catch {
       missingInputs.push("klines");
+    }
+
+    // Derivatives (funding / OI) — Coinglass or Binance public fallback
+    try {
+      const deriv = await getDerivativesMetrics(symbol);
+      if (deriv.fundingRate != null) {
+        const fundingScore = Math.max(-10, Math.min(10, -deriv.fundingRate * 5000));
+        totalScore += fundingScore;
+        evidence.push({
+          module: "coinglass/binance",
+          label: "Funding Rate",
+          value: `${(deriv.fundingRate * 100).toFixed(4)}%`,
+          available: true,
+        });
+        signals.push({
+          name: "Funding Rate",
+          score: fundingScore,
+          maxScore: 10,
+          direction: fundingScore > 0 ? "bullish" : fundingScore < 0 ? "bearish" : "neutral",
+          detail: "Crowded long funding penalized; negative funding favored",
+        });
+      } else {
+        missingInputs.push("funding rate");
+      }
+    } catch {
+      missingInputs.push("funding rate");
+    }
+
+    if (eventRisk) {
+      totalScore -= 8;
+      evidence.push({
+        module: "sosovalue",
+        label: "Macro Event Risk",
+        value: "High-impact event within ±12h",
+        available: true,
+      });
+      signals.push({
+        name: "Macro Event Risk",
+        score: -8,
+        maxScore: 10,
+        direction: "bearish",
+        detail: "Size/confidence reduced ahead of macro print",
+      });
+    }
+
+    if (symbol === "BTC" && treasuryBias) {
+      totalScore += 5;
+      evidence.push({
+        module: "sosovalue",
+        label: "BTC Treasuries",
+        value: `${treasuryResult?.data?.length ?? 0} corporate holders tracked`,
+        available: true,
+      });
+      signals.push({
+        name: "Treasury Bid",
+        score: 5,
+        maxScore: 5,
+        direction: "bullish",
+        detail: "Corporate BTC treasury presence",
+      });
     }
 
     const tradable = !!symbolMap[symbol];

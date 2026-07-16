@@ -23,4 +23,10 @@ export async function ledgerRouter(app: FastifyInstance) {
   app.get("/stats", async () => {
     return { data: signalLedger.getStats() };
   });
+
+  app.post("/resolve", async () => {
+    const { resolveLedgerOutcomes } = await import("../services/ledgerOutcomes.js");
+    const result = await resolveLedgerOutcomes();
+    return { data: result };
+  });
 }

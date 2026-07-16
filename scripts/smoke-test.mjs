@@ -34,6 +34,9 @@ async function main() {
       if (!data.executionMode) throw new Error("missing executionMode");
       if (!data.integrations?.sodex) throw new Error("missing sodex integration probe");
       if (!data.integrations?.sosovalue) throw new Error("missing sosovalue integration probe");
+      if (data.executionMode === "live" && !data.env?.sodexKeyName) {
+        throw new Error("live execution requires SODEX_API_KEY_NAME");
+      }
       if (REQUIRE_SOSOVALUE && !data.integrations.sosovalue.ok) {
         throw new Error(`SoSoValue probe failed: ${data.integrations.sosovalue.message}`);
       }
@@ -111,6 +114,21 @@ async function main() {
       if (!Array.isArray(data.data)) throw new Error("missing data array");
       if (!data.meta?.status) throw new Error("missing meta.status");
     }],
+    ["GET /api/market/opportunities", async () => {
+      const res = await fetch(`${API_URL}/api/market/opportunities?limit=3`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!Array.isArray(data.data)) throw new Error("missing data array");
+      if (!data.meta?.status) throw new Error("missing meta.status");
+    }],
+    ["GET /api/ledger/stats", async () => {
+      const res = await fetch(`${API_URL}/api/ledger/stats`);
+      if (!res.ok) throw new Error(`status ${res.status}`);
+      const data = await res.json();
+      if (!data.data || typeof data.data.totalSignals !== "number") {
+        throw new Error("missing ledger stats");
+      }
+    }],
     ["GET /api/strategies", async () => {
       const res = await fetch(`${API_URL}/api/strategies`);
       if (!res.ok) throw new Error(`status ${res.status}`);
@@ -138,7 +156,21 @@ async function main() {
       });
       if (!res.ok) throw new Error(`status ${res.status}`);
       const data = await res.json();
-      if (!data.data?.checks || data.data.checks.length < 8) throw new Error("expected 8 sentinel checks");
+      if (!data.data?.checks || data.data.checks.length < 8) throw new Error("expected at least 8 sentinel checks");
+    }],
+    ["POST /api/broker/execute rejects unsigned intents", async () => {
+      const res = await fetch(`${API_URL}/api/broker/execute`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          strategyId: "pipeline-preview",
+          newsletterId: "nl-test",
+          userAddress: "0x0000000000000000000000000000000000000001",
+          allocationUSD: 100,
+          maxSlippageBps: 50,
+        }),
+      });
+      if (res.status !== 401) throw new Error(`expected 401, got ${res.status}`);
     }],
     ["GET /api/copy-trade/performance", async () => {
       const res = await fetch(`${API_URL}/api/copy-trade/performance`);

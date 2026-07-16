@@ -10,8 +10,20 @@
  * tool registry if the SDK is not installed in the hackathon context.
  */
 
-import { getETFFlows, getNewsSentiment, getMarketSnapshots, getLatestCryptoNews, getDefiLlamaTVL } from "../services/sosovalue.js";
+import {
+  getETFFlows,
+  getNewsSentiment,
+  getMarketSnapshots,
+  getLatestCryptoNews,
+  getDefiLlamaTVL,
+  getSoSoIndexList,
+  getMacroEvents,
+  getBtcTreasuries,
+  getCryptoStocks,
+} from "../services/sosovalue.js";
 import { getSpotTickers, getOrderBook } from "../services/sodex.js";
+import { getCachedOpportunities, runDiscoveryCycle } from "../services/opportunityEngine.js";
+import { signalLedger } from "../store/signalLedger.js";
 
 // ─── Tool Definition ──────────────────────────────────────────────────────────
 
@@ -137,6 +149,63 @@ export const MCP_TOOLS: MCPTool[] = [
       const symbol = String(input.symbol);
       const limit = typeof input.limit === "number" ? input.limit : 20;
       return await getOrderBook(symbol, limit);
+    },
+  },
+
+  {
+    name: "get_soso_indexes",
+    description: "List SoSoValue official indexes for SSI comparison and seeding.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => getSoSoIndexList(),
+  },
+  {
+    name: "get_macro_events",
+    description: "Fetch SoSoValue macroeconomic calendar events (FOMC, CPI, etc.).",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => getMacroEvents(),
+  },
+  {
+    name: "get_btc_treasuries",
+    description: "Corporate BTC treasury holders from SoSoValue.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => getBtcTreasuries(),
+  },
+  {
+    name: "get_crypto_stocks",
+    description: "Crypto-related equities snapshots from SoSoValue.",
+    inputSchema: { type: "object", properties: {} },
+    handler: async () => getCryptoStocks(),
+  },
+  {
+    name: "get_opportunities",
+    description: "Run or read Opportunity Discovery scores (SoSoValue + SoDEX + funding).",
+    inputSchema: {
+      type: "object",
+      properties: {
+        refresh: { type: "boolean", description: "Force a fresh scan", default: false },
+      },
+    },
+    handler: async (input) => {
+      if (input.refresh) return runDiscoveryCycle();
+      const cached = getCachedOpportunities();
+      return cached.data.length ? cached : runDiscoveryCycle();
+    },
+  },
+  {
+    name: "get_ledger_signals",
+    description: "Query verified signal ledger entries with digests and evidence.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: { type: "number", description: "Max signals", default: 20 },
+      },
+    },
+    handler: async (input) => {
+      const limit = typeof input.limit === "number" ? input.limit : 20;
+      return {
+        signals: signalLedger.getSignals(limit),
+        stats: signalLedger.getStats(),
+      };
     },
   },
 ];

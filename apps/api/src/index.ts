@@ -9,9 +9,14 @@ import { copyTradeRouter } from "./routes/copyTrade.js";
 import { marketRouter } from "./routes/market.js";
 import { agentRouter } from "./routes/agents.js";
 import { mcpRouter } from "./routes/mcp.js";
+import { ledgerRouter } from "./routes/ledger.js";
+import { socialRouter } from "./routes/social.js";
 import { startJournalistAgent } from "./agents/journalist/index.js";
 import { startChartAnalystAgent } from "./agents/chartanalyst/index.js";
 import { wsManager } from "./ws/manager.js";
+import { startSodexWsRelay } from "./services/sodexWsRelay.js";
+import { startAlertEngine } from "./services/alerts.js";
+import { getRedis } from "./lib/redis.js";
 
 const app = Fastify({
   logger: {
@@ -42,6 +47,8 @@ await app.register(copyTradeRouter, { prefix: "/api/copy-trade" });
 await app.register(marketRouter, { prefix: "/api/market" });
 await app.register(agentRouter, { prefix: "/api/agents" });
 await app.register(mcpRouter, { prefix: "/api/mcp" });
+await app.register(ledgerRouter, { prefix: "/api/ledger" });
+await app.register(socialRouter, { prefix: "/api/social" });
 
 // ── Standalone sentinel & broker endpoints (frontend shortcuts) ─────────────
 app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
@@ -60,6 +67,23 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
     const { runSentinel } = await import("./agents/sentinel/index.js");
     const { executeCopyTrade } = await import("./agents/broker/index.js");
     const { tradeStore } = await import("./store/tradeStore.js");
+    const { verifyCopyTradeAuth } = await import("./signing/copyTradeAuth.js");
+
+    const auth = verifyCopyTradeAuth({
+      strategyId: intent.strategyId,
+      allocationUSD: intent.allocationUSD,
+      maxSlippageBps: intent.maxSlippageBps,
+      userAddress: intent.userAddress,
+      deadline: intent.deadline ?? 0,
+      userSignature: intent.userSignature ?? "",
+    });
+    if (!auth.valid) {
+      tradeStore.recordError(
+        { strategyId: intent.strategyId, userAddress: intent.userAddress },
+        auth.error ?? "Copy-trade authorization failed",
+      );
+      return reply.code(401).send({ error: auth.error ?? "Copy-trade authorization failed" });
+    }
 
     const sentinel = runSentinel(intent);
     if (!sentinel.passed) {
@@ -73,7 +97,7 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
 
     try {
       const result = await executeCopyTrade(intent);
-      const simulated = !config.SODEX_API_PRIVATE_KEY;
+      const simulated = !config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME;
       tradeStore.recordExecution(intent, result, simulated);
       return { data: { ...result, simulated } };
     } catch (err) {
@@ -143,9 +167,12 @@ try {
   await app.listen({ port: config.PORT, host: "0.0.0.0" });
   app.log.info(`Bloom AI API listening on port ${config.PORT}`);
 
-  // Kick off background agents
+  // Kick off background agents + relays
+  getRedis();
   startJournalistAgent();
   startChartAnalystAgent();
+  startSodexWsRelay();
+  startAlertEngine();
 } catch (err) {
   app.log.error(err);
   process.exit(1);

@@ -10,7 +10,15 @@ import {
   getCurrencySnapshot,
   getCurrencyFundraising,
   getKlines,
+  getSoSoIndexList,
+  getSoSoIndexConstituents,
+  getMacroEvents,
+  getBtcTreasuries,
+  getCryptoStocks,
+  getAnalysisCharts,
+  getHotNews,
 } from "../services/sosovalue.js";
+import { getRecentAlerts } from "../services/alerts.js";
 import {
   getSpotTickers,
   getOrderBook,
@@ -24,8 +32,25 @@ import {
   getPerpsAccountState,
 } from "../services/sodex.js";
 import { marketEnvelope, unavailableEnvelope } from "../lib/marketMeta.js";
+import { getCachedOpportunities, runDiscoveryCycle } from "../services/opportunityEngine.js";
 
 export async function marketRouter(app: FastifyInstance) {
+  app.get<{ Querystring: { limit?: string; refresh?: string } }>("/opportunities", async (req) => {
+    const limit = Math.min(parseInt(req.query.limit ?? "10", 10), 50);
+    const refresh = req.query.refresh === "true";
+    const snapshot = refresh ? {
+      data: await runDiscoveryCycle(),
+      cachedAt: new Date().toISOString(),
+      isStale: false,
+    } : getCachedOpportunities();
+    const data = snapshot.data.length === 0 ? await runDiscoveryCycle() : snapshot.data;
+    return marketEnvelope(data.slice(0, limit), {
+      cachedAt: snapshot.cachedAt ? new Date(snapshot.cachedAt).getTime() : null,
+      isStale: snapshot.isStale,
+      message: data.length === 0 ? "No opportunities scored yet" : undefined,
+    });
+  });
+
   // ── Overview (all at once) ─────────────────────────────────────────────────
   app.get("/overview", async () => {
     const [marketsResult, etfResult, sentimentResult] = await Promise.allSettled([
@@ -343,5 +368,67 @@ export async function marketRouter(app: FastifyInstance) {
     } catch {
       return unavailableEnvelope([], "Perps symbols temporarily unavailable");
     }
+  });
+
+  // ── SoSoValue Index / Macro / Treasuries / Stocks / Charts ────────────────
+  app.get("/indexes", async () => {
+    const result = await getSoSoIndexList();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: result.data.length === 0 ? "SoSoValue indexes unavailable" : undefined,
+    });
+  });
+
+  app.get<{ Params: { id: string } }>("/indexes/:id/constituents", async (req) => {
+    const result = await getSoSoIndexConstituents(req.params.id);
+    return marketEnvelope(result.data, { cachedAt: result.cachedAt, isStale: result.isStale });
+  });
+
+  app.get("/macro", async () => {
+    const result = await getMacroEvents();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: result.data.length === 0 ? "Macro calendar unavailable" : undefined,
+    });
+  });
+
+  app.get("/btc-treasuries", async () => {
+    const result = await getBtcTreasuries();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: result.data.length === 0 ? "BTC treasuries unavailable" : undefined,
+    });
+  });
+
+  app.get("/crypto-stocks", async () => {
+    const result = await getCryptoStocks();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: result.data.length === 0 ? "Crypto stocks unavailable" : undefined,
+    });
+  });
+
+  app.get("/analysis-charts", async () => {
+    const result = await getAnalysisCharts();
+    return marketEnvelope(result.data, {
+      cachedAt: result.cachedAt,
+      isStale: result.isStale,
+      message: result.data.length === 0 ? "Analysis charts unavailable" : undefined,
+    });
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/hot-news", async (req) => {
+    const limit = Math.min(parseInt(req.query.limit ?? "10", 10), 30);
+    const result = await getHotNews(limit);
+    return marketEnvelope(result.data, { cachedAt: result.cachedAt, isStale: result.isStale });
+  });
+
+  app.get<{ Querystring: { limit?: string } }>("/alerts", async (req) => {
+    const limit = Math.min(parseInt(req.query.limit ?? "30", 10), 100);
+    return marketEnvelope(getRecentAlerts(limit), { cachedAt: Date.now(), isStale: false });
   });
 }

@@ -14,7 +14,7 @@ describe("Sentinel", () => {
   it("passes valid intent", () => {
     const report = runSentinel(baseIntent);
     assert.equal(report.passed, true);
-    assert.equal(report.checks.length, 8);
+    assert.ok(report.checks.length >= 8);
   });
 
   it("blocks oversized order", () => {

@@ -1,5 +1,12 @@
 import type { CopyTradeIntent, SentinelReport, SentinelCheck } from "@bloom-ai/types";
 import { config } from "../../config.js";
+import {
+  getDailySpend,
+  recordSpend,
+  getLossStreak,
+  recordLoss as persistLoss,
+  resetLossStreak as persistResetLoss,
+} from "../../store/sentinelState.js";
 
 export let sentinelStatus: {
   status: "running" | "idle" | "error";
@@ -33,47 +40,21 @@ export function runSentinelPreview(strategyId: string): SentinelReport {
   }
 }
 
-/** Daily spend tracker — in production backed by Redis */
-const dailySpend: Map<string, { amount: number; resetAt: number }> = new Map();
-
-/** Consecutive-loss circuit breaker tracker — per user address */
-const lossStreak: Map<string, number> = new Map();
-
 /** Call this when a trade fails to increment the streak */
 export function recordLoss(userAddress: string): void {
-  const key = userAddress.toLowerCase();
-  lossStreak.set(key, (lossStreak.get(key) ?? 0) + 1);
+  persistLoss(userAddress);
 }
 
 /** Reset streak on a successful trade */
 export function resetLossStreak(userAddress: string): void {
-  lossStreak.delete(userAddress.toLowerCase());
+  persistResetLoss(userAddress);
 }
 
-function getDailySpend(userAddress: string): number {
-  const entry = dailySpend.get(userAddress.toLowerCase());
-  if (!entry) return 0;
-  if (Date.now() > entry.resetAt) return 0; // past midnight reset
-  return entry.amount;
-}
-
-function recordSpend(userAddress: string, amountUSD: number) {
-  const key = userAddress.toLowerCase();
-  const existing = dailySpend.get(key);
-  const midnight = new Date();
-  midnight.setUTCHours(24, 0, 0, 0);
-
-  if (!existing || Date.now() > existing.resetAt) {
-    dailySpend.set(key, { amount: amountUSD, resetAt: midnight.getTime() });
-  } else {
-    existing.amount += amountUSD;
-  }
-}
-
-/** Whitelisted SoDEX testnet contract addresses */
+/** Whitelisted SoDEX / ValueChain routing targets */
 const WHITELISTED_ADDRESSES = new Set([
-  "0x0000000000000000000000000000000000000000", // placeholder
-  "testnet-gw.sodex.dev", // symbolic — used for routing check
+  "testnet-gw.sodex.dev",
+  "mainnet-gw.sodex.dev",
+  "valuechain",
 ]);
 
 /**
@@ -171,7 +152,7 @@ export function runSentinel(intent: CopyTradeIntent): SentinelReport {
 
   // ── Check 8: Consecutive-loss circuit breaker ─────────────────────────────────
   const maxLosses = config.SENTINEL_MAX_CONSECUTIVE_LOSSES;
-  const streak = lossStreak.get(intent.userAddress.toLowerCase()) ?? 0;
+  const streak = getLossStreak(intent.userAddress);
   checks.push({
     rule: "CIRCUIT_BREAKER",
     passed: streak < maxLosses,
@@ -182,6 +163,39 @@ export function runSentinel(intent: CopyTradeIntent): SentinelReport {
         ? `${streak} consecutive losses detected — circuit breaker tripped. Reset required after manual review.`
         : undefined,
   });
+
+  // ── Check 9: Perps leverage cap ───────────────────────────────────────────────
+  if (intent.venue === "perps") {
+    const lev = intent.leverage ?? 1;
+    const maxLev = config.SENTINEL_MAX_LEVERAGE;
+    checks.push({
+      rule: "MAX_LEVERAGE",
+      passed: lev > 0 && lev <= maxLev && config.SODEX_ENABLE_PERPS_COPY,
+      actual: lev,
+      limit: maxLev,
+      message:
+        !config.SODEX_ENABLE_PERPS_COPY
+          ? "Perps copy-trade disabled"
+          : lev > maxLev
+            ? `Leverage ${lev}x exceeds max ${maxLev}x`
+            : undefined,
+    });
+  }
+
+  // ── Check 10: Mainnet requires explicit confirmation flag via signature ──────
+  if (config.SODEX_NETWORK === "mainnet") {
+    checks.push({
+      rule: "MAINNET_CONFIRMATION",
+      passed: !!intent.userSignature,
+      actual: intent.userSignature ? "signed" : "unsigned",
+      limit: "signed",
+      message: !intent.userSignature
+        ? "Mainnet trades require wallet EIP-712 confirmation"
+        : undefined,
+    });
+  }
+
+  void WHITELISTED_ADDRESSES; // reserved for contract-routing checks
 
   const passed = checks.every((c) => c.passed);
 

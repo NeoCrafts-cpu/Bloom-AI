@@ -149,6 +149,11 @@ export interface CopyTradeIntent {
   allocationUSD: number;
   maxSlippageBps: number;
   signalId?: string;
+  deadline?: number;
+  userSignature?: string;
+  /** Execution venue — spot (default) or perps when SODEX_ENABLE_PERPS_COPY=1 */
+  venue?: "spot" | "perps";
+  leverage?: number;
 }
 
 export interface CopyTradeResult {

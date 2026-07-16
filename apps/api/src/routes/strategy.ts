@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { v4 as uuid } from "uuid";
 import type { SSIIndex } from "@bloom-ai/types";
-import { strategyStore } from "../agents/strategist/index.js";
+import { strategyStore, validateWeights } from "../store/strategy.js";
 import { getMarketSnapshots } from "../services/sosovalue.js";
 import { marketEnvelope } from "../lib/marketMeta.js";
 
@@ -22,6 +22,14 @@ async function enrichWithLivePrices(strategies: SSIIndex[]): Promise<SSIIndex[]>
 }
 
 export async function strategyRouter(app: FastifyInstance) {
+  app.post<{ Body: { idA: string; idB: string; notionalUSD?: number } }>("/compare", async (req, reply) => {
+    const { idA, idB, notionalUSD } = req.body;
+    if (!idA || !idB) return reply.code(400).send({ error: "idA and idB required" });
+    const result = await strategyStore.compare(idA, idB, notionalUSD);
+    if ("error" in result) return reply.code(404).send({ error: result.error });
+    return { data: result };
+  });
+
   app.get("/", async () => {
     const strategies = await enrichWithLivePrices(strategyStore.getAll());
     return marketEnvelope(strategies, {
@@ -35,14 +43,19 @@ export async function strategyRouter(app: FastifyInstance) {
   });
 
   app.get<{ Params: { id: string } }>("/:id", async (req, reply) => {
-    const s = strategyStore.getById(req.params.id);
+    const s = await strategyStore.getWithLivePrices(req.params.id);
     if (!s) {
       return reply.code(404).send({
         error: "Strategy not found — run the agent pipeline first",
       });
     }
-    const [enriched] = await enrichWithLivePrices([s]);
-    return { data: enriched };
+    return {
+      data: {
+        strategy: s,
+        history: strategyStore.getHistory(req.params.id),
+        tradability: await strategyStore.getTradability(),
+      },
+    };
   });
 
   app.post<{ Body: Partial<SSIIndex> }>("/", async (req, reply) => {
@@ -65,5 +78,39 @@ export async function strategyRouter(app: FastifyInstance) {
 
     strategyStore.add(newStrategy);
     return reply.code(201).send({ data: newStrategy });
+  });
+
+  app.put<{ Params: { id: string }; Body: Partial<SSIIndex> }>("/:id", async (req, reply) => {
+    if (req.body.assets) {
+      const validation = validateWeights(req.body.assets);
+      if (!validation.valid) return reply.code(400).send({ error: validation.error });
+    }
+    const updated = strategyStore.update(req.params.id, {
+      ...req.body,
+      rebalancedAt: new Date().toISOString(),
+    });
+    if (!updated) return reply.code(404).send({ error: "Strategy not found" });
+    return { data: updated };
+  });
+
+  app.post<{ Params: { id: string }; Body: { assets: SSIIndex["assets"]; reason: string; signalId?: string } }>(
+    "/:id/rebalance",
+    async (req, reply) => {
+      if (!req.body.assets?.length || !req.body.reason?.trim()) {
+        return reply.code(400).send({ error: "assets and reason required" });
+      }
+      const result = strategyStore.rebalance(req.params.id, req.body.assets, req.body.reason, req.body.signalId);
+      if ("error" in result) return reply.code(400).send({ error: result.error });
+      return { data: result };
+    },
+  );
+
+  app.post<{ Params: { id: string } }>("/:id/publish", async (req, reply) => {
+    const updated = strategyStore.update(req.params.id, {
+      status: "published",
+      rebalancedAt: new Date().toISOString(),
+    });
+    if (!updated) return reply.code(404).send({ error: "Strategy not found" });
+    return { data: updated };
   });
 }

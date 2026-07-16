@@ -9,6 +9,8 @@ import { tradeStore } from "../store/tradeStore.js";
 import { strategyStore } from "../agents/strategist/index.js";
 import { getETFFlows, getMarketSnapshots } from "../services/sosovalue.js";
 import { getSpotTickers, getOrderBook, getSpotKlines } from "../services/sodex.js";
+import { getSodexWsRelayStatus } from "../services/sodexWsRelay.js";
+import { getRedis } from "./redis.js";
 
 const bootTime = Date.now();
 
@@ -54,7 +56,7 @@ export async function getHealthReport() {
   const newsletters = newsletterStore.getAll();
   const strategies = strategyStore.getAll();
   const perf = tradeStore.getPerformance();
-  const executionMode = config.SODEX_API_PRIVATE_KEY ? "live" : "simulated";
+  const executionMode = config.SODEX_API_PRIVATE_KEY && config.SODEX_API_KEY_NAME ? "live" : "simulated";
 
   const [sosovalueProbe, sodexProbe, pricesResult] = await Promise.all([
     probeSosovalue(),
@@ -75,9 +77,17 @@ export async function getHealthReport() {
     uptimeSeconds: Math.floor((Date.now() - bootTime) / 1000),
     executionMode,
     ready,
+    network: config.SODEX_NETWORK,
+    chainId: config.SODEX_CHAIN_ID,
+    features: {
+      perpsCopy: config.SODEX_ENABLE_PERPS_COPY,
+      twap: config.SODEX_ENABLE_TWAP,
+      redis: !!getRedis(),
+    },
     integrations: {
       sosovalue: sosovalueProbe,
       sodex: sodexProbe,
+      sodexWs: getSodexWsRelayStatus(),
       priceSource: pricesResult?.source ?? "unknown",
     },
     journalist: {
@@ -120,6 +130,7 @@ export async function getHealthReport() {
       openrouter: !!config.OPENROUTER_API_KEY,
       sosovalue: !!config.SOSOVALUE_API_KEY,
       sodexPrivateKey: !!config.SODEX_API_PRIVATE_KEY,
+      sodexKeyName: !!config.SODEX_API_KEY_NAME,
       sodexKeyAddress: !!config.SODEX_API_KEY_ADDRESS,
     },
   };

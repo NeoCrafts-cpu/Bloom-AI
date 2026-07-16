@@ -4,6 +4,7 @@ import { getNonce } from "../signing/nonceManager.js";
 import { buildTypedSignature } from "../signing/eip712.js";
 import type { SpotOrderItem, PerpsOrderItem } from "@bloom-ai/types";
 import { parseSodexKlines, parseSodexTickerChangePct, parseSodexTickerPrice, parseSodexTickerVolume } from "../lib/sodexParse.js";
+import { ethers } from "ethers";
 
 const SPOT = config.SODEX_SPOT_URL;
 const PERPS = config.SODEX_PERPS_URL;
@@ -34,7 +35,11 @@ async function signedPost<T>(
   actionType: string,
   params: Record<string, unknown>,
 ): Promise<T> {
-  const nonce = await getNonce(config.SODEX_API_KEY_ADDRESS);
+  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+    throw new Error("SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME are required for live SoDEX execution");
+  }
+  const signingAddress = config.SODEX_API_KEY_ADDRESS || new ethers.Wallet(config.SODEX_API_PRIVATE_KEY).address;
+  const nonce = await getNonce(signingAddress);
   const payload = { type: actionType, params };
   const { typedSig } = await buildTypedSignature(payload, nonce, domainName);
 
@@ -43,7 +48,7 @@ async function signedPost<T>(
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
-      "X-API-Key": config.SODEX_API_KEY_ADDRESS,
+      "X-API-Key": config.SODEX_API_KEY_NAME,
       "X-API-Sign": typedSig,
       "X-API-Nonce": String(nonce),
     },
@@ -300,13 +305,13 @@ export async function placeBatchSpotOrders(
   symbolID: number,
   orders: SpotOrderItem[],
 ): Promise<{ clOrdID: string; status: string; message?: string }[]> {
-  if (!config.SODEX_API_PRIVATE_KEY) {
+  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
     // Simulation mode — no private key configured
     console.warn("[Broker] SODEX_API_PRIVATE_KEY not set — simulating order fills");
     return orders.map((o) => ({
       clOrdID: o.clOrdID,
       status: "FILLED",
-      message: "Simulated — configure SODEX_API_PRIVATE_KEY for live execution",
+      message: "Simulated — configure SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME for live execution",
     }));
   }
 
@@ -323,11 +328,11 @@ export async function placeBatchPerpsOrders(
   symbolID: number,
   orders: PerpsOrderItem[],
 ) {
-  if (!config.SODEX_API_PRIVATE_KEY) {
+  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
     return orders.map((o) => ({
       clOrdID: o.clOrdID,
       status: "FILLED",
-      message: "Simulated — configure SODEX_API_PRIVATE_KEY for live execution",
+      message: "Simulated — configure SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME for live execution",
     }));
   }
 
@@ -345,7 +350,7 @@ export async function cancelOrder(
   clOrdID: string,
   isPerps = false,
 ) {
-  if (!config.SODEX_API_PRIVATE_KEY) {
+  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
     return { clOrdID, status: "CANCELLED", message: "Simulated" };
   }
   const base = isPerps ? PERPS : SPOT;
@@ -355,6 +360,51 @@ export async function cancelOrder(
     "cancelOrder",
     { accountID, symbolID, orders: [{ clOrdID }] },
   );
+}
+
+/** TWAP order (spot or perps) — requires SODEX_ENABLE_TWAP=1 for live path callers */
+export async function placeTwapOrder(
+  accountID: number,
+  symbolID: number,
+  params: {
+    clOrdID: string;
+    side: number;
+    quantity: string;
+    durationSec: number;
+    isPerps?: boolean;
+  },
+) {
+  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+    return { clOrdID: params.clOrdID, status: "SUBMITTED", message: "Simulated TWAP" };
+  }
+  if (!config.SODEX_ENABLE_TWAP) {
+    throw new Error("TWAP disabled — set SODEX_ENABLE_TWAP=1");
+  }
+  const isPerps = !!params.isPerps;
+  return signedPost(
+    `${isPerps ? PERPS : SPOT}/trade/twap`,
+    isPerps ? "futures" : "spot",
+    "newTwapOrder",
+    {
+      accountID,
+      symbolID,
+      clOrdID: params.clOrdID,
+      side: params.side,
+      quantity: params.quantity,
+      duration: params.durationSec,
+    },
+  );
+}
+
+export async function updatePerpsLeverage(accountID: number, symbolID: number, leverage: number) {
+  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+    return { accountID, symbolID, leverage, status: "SIMULATED" };
+  }
+  return signedPost(`${PERPS}/trade/leverage`, "futures", "updateLeverage", {
+    accountID,
+    symbolID,
+    leverage,
+  });
 }
 
 // ─── Perps Market Data ────────────────────────────────────────────────────────

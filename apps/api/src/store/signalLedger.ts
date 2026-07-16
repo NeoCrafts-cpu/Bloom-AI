@@ -163,6 +163,20 @@ class SignalLedgerStore {
     return this.outcomes.slice(0, limit);
   }
 
+  /** Mutate an outcome in place (mark-to-market resolution) and persist. */
+  resolveOutcome(
+    signalId: string,
+    patch: Partial<Pick<SignalOutcome, "pnlUSD" | "pnlBps" | "exitNotionalUSD" | "resolvedAt" | "horizonHours">>,
+  ): SignalOutcome | undefined {
+    const outcome = this.outcomes.find((o) => o.signalId === signalId);
+    if (!outcome) return undefined;
+    Object.assign(outcome, patch);
+    if (!outcome.resolvedAt) outcome.resolvedAt = new Date().toISOString();
+    this.updateStatus(signalId, "resolved");
+    this.persist();
+    return outcome;
+  }
+
   getStats(): LedgerStats {
     const bySource: Record<SignalSource, number> = {
       journalist: 0,

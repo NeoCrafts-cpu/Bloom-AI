@@ -2,25 +2,9 @@ import { v4 as uuid } from "uuid";
 import type { SSIIndex, SSIAssetWeight, SmartMoneyNewsletter } from "@bloom-ai/types";
 import { getMarketSnapshots } from "../../services/sosovalue.js";
 import { wsManager } from "../../ws/manager.js";
-
-// In-memory strategy store — production: persist to Postgres + SSI contracts
-class StrategyStore {
-  private strategies: SSIIndex[] = [];
-
-  getAll(): SSIIndex[] { return this.strategies; }
-  getById(id: string): SSIIndex | undefined { return this.strategies.find(s => s.id === id); }
-
-  add(strategy: SSIIndex) {
-    this.strategies.unshift(strategy);
-  }
-
-  updateTVL(id: string, tvl: number) {
-    const s = this.strategies.find(s => s.id === id);
-    if (s) s.tvl = tvl;
-  }
-}
-
-export const strategyStore = new StrategyStore();
+import { strategyStore } from "../../store/strategy.js";
+import { signalLedger } from "../../store/signalLedger.js";
+export { strategyStore };
 
 export let strategistStatus: {
   status: "running" | "idle" | "error";
@@ -76,6 +60,27 @@ export async function runStrategistCycle(
     };
 
     strategyStore.add(newStrategy);
+
+    const signal = signalLedger.recordSignal({
+      source: "strategist",
+      title: `SSI Index Created: ${newStrategy.symbol}`,
+      summary: newStrategy.description,
+      narrative: newsletter.narrative,
+      keyAssets: newStrategy.assets.map((a) => a.symbol),
+      newsletterId: newsletter.id,
+      strategyId: newStrategy.id,
+      evidence: newStrategy.assets.map((a) => ({
+        source: "strategist",
+        label: a.symbol,
+        value: `${(a.weight * 100).toFixed(1)}% @ $${a.currentPrice}`,
+        module: "computed" as const,
+      })),
+      inputData: { newsletterId: newsletter.id, narrative: newsletter.narrative },
+      contentData: newStrategy,
+    });
+    signalLedger.linkStrategy(signal.id, newStrategy.id);
+    newStrategy.signalId = signal.id;
+    strategyStore.update(newStrategy.id, { signalId: signal.id });
 
     wsManager.broadcast({
       type: "STRATEGY_CREATED",

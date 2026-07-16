@@ -483,3 +483,218 @@ export async function getCurrencyFundraising(
     return { data: null, cachedAt: Date.now(), isStale: true };
   }
 }
+
+// ─── SoSoValue Index ──────────────────────────────────────────────────────────
+
+export interface SoSoIndex {
+  index_id?: string;
+  id?: string;
+  name: string;
+  symbol?: string;
+  description?: string;
+}
+
+export interface SoSoIndexConstituent {
+  symbol: string;
+  weight?: number;
+  name?: string;
+}
+
+async function fetchIndexList(): Promise<SoSoIndex[]> {
+  if (!config.SOSOVALUE_API_KEY) return [];
+  const data = await get<{ list?: SoSoIndex[] } | SoSoIndex[]>("/indexes", { page_size: "50", page: "1" }).catch(
+    () => get<{ list?: SoSoIndex[] } | SoSoIndex[]>("/indices", { page_size: "50", page: "1" }),
+  );
+  if (Array.isArray(data)) return data;
+  return data?.list ?? [];
+}
+
+export async function getSoSoIndexList(): Promise<{ data: SoSoIndex[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get("soso-indexes", TTL.SOSO_INDEX, fetchIndexList);
+  } catch (err) {
+    console.warn("[Market] SoSoValue indexes unavailable:", (err as Error).message);
+    return { data: [], cachedAt: Date.now(), isStale: true };
+  }
+}
+
+export async function getSoSoIndexConstituents(
+  indexId: string,
+): Promise<{ data: SoSoIndexConstituent[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get(`soso-index-const-${indexId}`, TTL.SOSO_INDEX, async () => {
+      const data = await get<{ list?: SoSoIndexConstituent[] } | SoSoIndexConstituent[]>(
+        `/indexes/${indexId}/constituents`,
+      ).catch(() => get<{ list?: SoSoIndexConstituent[] } | SoSoIndexConstituent[]>(`/indices/${indexId}/constituents`));
+      if (Array.isArray(data)) return data;
+      return data?.list ?? [];
+    });
+  } catch {
+    return { data: [], cachedAt: Date.now(), isStale: true };
+  }
+}
+
+// ─── Macro Events ─────────────────────────────────────────────────────────────
+
+export interface MacroEvent {
+  id?: string;
+  title: string;
+  country?: string;
+  importance?: number | string;
+  datetime?: string;
+  date?: string;
+  actual?: string | number | null;
+  forecast?: string | number | null;
+  previous?: string | number | null;
+}
+
+async function fetchMacroEvents(): Promise<MacroEvent[]> {
+  if (!config.SOSOVALUE_API_KEY) return [];
+  const data = await get<{ list?: MacroEvent[] } | MacroEvent[]>("/macro/events", {
+    page_size: "30",
+    page: "1",
+  });
+  if (Array.isArray(data)) return data;
+  return data?.list ?? [];
+}
+
+export async function getMacroEvents(): Promise<{ data: MacroEvent[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get("macro-events", TTL.MACRO_EVENTS, fetchMacroEvents);
+  } catch (err) {
+    console.warn("[Market] Macro events unavailable:", (err as Error).message);
+    return { data: [], cachedAt: Date.now(), isStale: true };
+  }
+}
+
+/** True when a high-importance macro event is within ±12h */
+export function hasNearTermMacroRisk(events: MacroEvent[], hours = 12): boolean {
+  const now = Date.now();
+  const windowMs = hours * 60 * 60 * 1000;
+  return events.some((e) => {
+    const ts = Date.parse(e.datetime ?? e.date ?? "");
+    if (Number.isNaN(ts)) return false;
+    const importance = typeof e.importance === "number" ? e.importance : Number(e.importance ?? 0);
+    return Math.abs(ts - now) <= windowMs && importance >= 2;
+  });
+}
+
+// ─── BTC Treasuries ───────────────────────────────────────────────────────────
+
+export interface BtcTreasuryCompany {
+  company?: string;
+  name?: string;
+  ticker?: string;
+  btc_holdings?: number;
+  holdings?: number;
+  market_value?: number;
+}
+
+async function fetchBtcTreasuries(): Promise<BtcTreasuryCompany[]> {
+  if (!config.SOSOVALUE_API_KEY) return [];
+  const data = await get<{ list?: BtcTreasuryCompany[] } | BtcTreasuryCompany[]>("/btc-treasuries", {
+    page_size: "50",
+    page: "1",
+  }).catch(() =>
+    get<{ list?: BtcTreasuryCompany[] } | BtcTreasuryCompany[]>("/btc-treasury", { page_size: "50", page: "1" }),
+  );
+  if (Array.isArray(data)) return data;
+  return data?.list ?? [];
+}
+
+export async function getBtcTreasuries(): Promise<{ data: BtcTreasuryCompany[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get("btc-treasuries", TTL.BTC_TREASURY, fetchBtcTreasuries);
+  } catch (err) {
+    console.warn("[Market] BTC treasuries unavailable:", (err as Error).message);
+    return { data: [], cachedAt: Date.now(), isStale: true };
+  }
+}
+
+// ─── Crypto Stocks ────────────────────────────────────────────────────────────
+
+export interface CryptoStock {
+  symbol: string;
+  name?: string;
+  price?: number;
+  change_pct_24h?: number;
+  marketcap?: number;
+  sector?: string;
+}
+
+async function fetchCryptoStocks(): Promise<CryptoStock[]> {
+  if (!config.SOSOVALUE_API_KEY) return [];
+  const data = await get<{ list?: CryptoStock[] } | CryptoStock[]>("/crypto-stocks", {
+    page_size: "50",
+    page: "1",
+  });
+  if (Array.isArray(data)) return data;
+  return data?.list ?? [];
+}
+
+export async function getCryptoStocks(): Promise<{ data: CryptoStock[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get("crypto-stocks", TTL.CRYPTO_STOCKS, fetchCryptoStocks);
+  } catch (err) {
+    console.warn("[Market] Crypto stocks unavailable:", (err as Error).message);
+    return { data: [], cachedAt: Date.now(), isStale: true };
+  }
+}
+
+// ─── Analysis Charts ──────────────────────────────────────────────────────────
+
+export interface AnalysisChart {
+  chart_id?: string;
+  id?: string;
+  title: string;
+  category?: string;
+  description?: string;
+}
+
+async function fetchAnalysisCharts(): Promise<AnalysisChart[]> {
+  if (!config.SOSOVALUE_API_KEY) return [];
+  const data = await get<{ list?: AnalysisChart[] } | AnalysisChart[]>("/analysis-charts", {
+    page_size: "30",
+    page: "1",
+  }).catch(() => get<{ list?: AnalysisChart[] } | AnalysisChart[]>("/charts", { page_size: "30", page: "1" }));
+  if (Array.isArray(data)) return data;
+  return data?.list ?? [];
+}
+
+export async function getAnalysisCharts(): Promise<{ data: AnalysisChart[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get("analysis-charts", TTL.ANALYSIS_CHARTS, fetchAnalysisCharts);
+  } catch (err) {
+    console.warn("[Market] Analysis charts unavailable:", (err as Error).message);
+    return { data: [], cachedAt: Date.now(), isStale: true };
+  }
+}
+
+// ─── Hot / Featured News ──────────────────────────────────────────────────────
+
+export async function getHotNews(limit = 10): Promise<{ data: NewsSentiment[]; cachedAt: number; isStale: boolean }> {
+  try {
+    return await cache.get(`hot-news-${limit}`, TTL.NEWS_SENTIMENT, async () => {
+      if (!config.SOSOVALUE_API_KEY) return [];
+      const data = await get<{ list?: SoSoNewsItem[] } | SoSoNewsItem[]>("/feeds/hot", {
+        page_size: String(limit),
+      }).catch(() => get<{ list?: SoSoNewsItem[] } | SoSoNewsItem[]>("/news/hot", { page_size: String(limit) }));
+      const list = Array.isArray(data) ? data : data?.list ?? [];
+      return list.map((item) => {
+        const { sentiment, score } = inferSentiment(item.title, item.tags ?? []);
+        return {
+          id: item.id,
+          title: item.title,
+          summary: item.summary ?? item.content?.slice(0, 200) ?? "",
+          sentiment,
+          score,
+          source: item.nick_name ?? item.author ?? "SoSoValue",
+          publishedAt: new Date(item.release_time || Date.now()).toISOString(),
+          tags: item.tags ?? [],
+        } as NewsSentiment;
+      });
+    });
+  } catch {
+    return getNewsSentiment(limit);
+  }
+}
