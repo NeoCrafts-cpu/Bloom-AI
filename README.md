@@ -92,8 +92,9 @@ npm run dev
 |----------|----------|-------------|
 | `SOSOVALUE_API_KEY` | Yes (for full demo) | SoSoValue Terminal API key |
 | `SODEX_SPOT_URL` | No | Default: `https://testnet-gw.sodex.dev/api/v1/spot` |
+| `SODEX_API_KEY_NAME` | Live execution | Registered SoDEX API key name sent in `X-API-Key` |
 | `SODEX_API_PRIVATE_KEY` | Live execution | EIP-712 signing key for SoDEX |
-| `SODEX_API_KEY_ADDRESS` | Live execution | SoDEX API key address (paired with private key) |
+| `SODEX_API_KEY_ADDRESS` | Optional | SoDEX API key public address for nonce namespacing; derived from private key if omitted |
 | `OPENROUTER_API_KEY` | Optional | LLM for newsletters/TA |
 | `OPENROUTER_MODEL` | No | Default: `~anthropic/claude-sonnet-latest` |
 | `WEB_URL` | Production | Frontend URL for CORS |

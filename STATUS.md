@@ -2,7 +2,7 @@
 
 **Buildathon Target:** SoSoValue 2026 Buildathon  
 **Demo Deadline:** May 13–17, 2026  
-**Last Updated:** May 10, 2026
+**Last Updated:** July 16, 2026
 
 ---
 
@@ -10,9 +10,9 @@
 
 Bloom AI is an **Agentic Financial Media & Execution Network (AFMEN)** — the first platform to combine:
 - AI-generated institutional-grade newsletters (Smart Money Terminal) powered by real SoSoValue data
-- Autonomous on-chain SSI index portfolio creation with live prices from SoDEX
+- Autonomous SSI index portfolio creation with live prices from SoDEX
 - One-click copy-trading via SoDEX testnet with deterministic risk controls
-- In-memory TTL cache (stale-while-revalidate) eliminating all mock data
+- Five-agent pipeline: Journalist → Chart Analyst → Strategist → Sentinel → Broker
 
 ---
 
@@ -20,8 +20,8 @@ Bloom AI is an **Agentic Financial Media & Execution Network (AFMEN)** — the f
 
 ```
 apps/
-  web/        Next.js 15 · TypeScript · Tailwind CSS · Framer Motion  (port 3000)
-  api/        Fastify 4  · TypeScript ESM · tsx watch                  (port 4000)
+  web/        Next.js 15 · TypeScript · Tailwind CSS · Framer Motion  (port 3000) → Vercel
+  api/        Fastify 4  · TypeScript ESM · tsx watch                  (port 4000) → Render
 packages/
   types/      Shared TypeScript interfaces (SmartMoneyNewsletter, SSIIndex, etc.)
 ```
