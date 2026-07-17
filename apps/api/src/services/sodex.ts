@@ -157,6 +157,8 @@ async function signedPost<T>(
     Accept: "application/json",
     "X-API-Sign": typedSig,
     "X-API-Nonce": String(nonce),
+    // Recommended by SoDEX auth docs — identifies signature domain / network
+    "X-API-Chain": String(config.SODEX_CHAIN_ID),
   };
   // Named API key → send name. Master/"default" → omit header (SoDEX docs).
   if (auth.apiKeyName) {
@@ -443,10 +445,11 @@ export async function placeBatchSpotOrders(
     }),
   );
 
-  return signedPost<{ clOrdID: string; status: string; message?: string }[]>(
+  // Spot /trade/orders/batch must sign as batchNewOrder (newOrder → "API key not found")
+  return signedPost<{ clOrdID: string; status: string; message?: string; code?: number; orderID?: number }[]>(
     `${SPOT}/trade/orders/batch`,
     "spot",
-    "newOrder",
+    "batchNewOrder",
     { accountID, orders: serialized },
   );
 }
@@ -467,7 +470,7 @@ export async function placeBatchPerpsOrders(
   return signedPost(
     `${PERPS}/trade/orders/batch`,
     "futures",
-    "newOrder",
+    "batchNewOrder",
     {
       accountID,
       symbolID,
@@ -489,7 +492,7 @@ export async function cancelOrder(
     return signedPost(
       `${PERPS}/trade/orders/batch`,
       "futures",
-      "cancelOrder",
+      "batchCancelOrder",
       { accountID, cancels: [{ symbolID, clOrdID }] },
     );
   }
@@ -497,7 +500,7 @@ export async function cancelOrder(
   return signedPost(
     `${SPOT}/trade/orders/batch`,
     "spot",
-    "cancelOrder",
+    "batchCancelOrder",
     { accountID, cancels: [{ symbolID, clOrdID }] },
   );
 }

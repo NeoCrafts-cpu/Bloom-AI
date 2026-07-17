@@ -55,22 +55,44 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     throw new Error("Mainnet execution requires explicit user signature");
   }
 
+  // Resolve trading account: prefer connected wallet, then configured SoDEX owner, then signing key.
+  // MetaMask can differ from SODEX_API_PRIVATE_KEY — orders must use the funded SoDEX account.
+  const { getSigningAddress } = await import("../../services/sodex.js");
+  const candidateAddrs = [
+    intent.userAddress,
+    config.SODEX_API_KEY_ADDRESS,
+    getSigningAddress(),
+  ]
+    .map((a) => a?.trim())
+    .filter((a): a is string => !!a && /^0x[0-9a-fA-F]{40}$/.test(a));
+
   let accountID = 0;
-  if (intent.userAddress && intent.userAddress !== "0x0000000000000000000000000000000000000000") {
+  let resolvedAddr = "";
+  for (const addr of [...new Set(candidateAddrs.map((a) => a.toLowerCase()))]) {
     const accountState = usePerps
-      ? await getPerpsAccountState(intent.userAddress)
-      : await getAccountState(intent.userAddress);
+      ? await getPerpsAccountState(addr)
+      : await getAccountState(addr);
     if (accountState && accountState.accountID > 0) {
       accountID = accountState.accountID;
-      console.log(`[Broker] Resolved accountID=${accountID} for ${intent.userAddress}`);
-    } else {
-      console.warn(`[Broker] Could not resolve accountID for ${intent.userAddress}`);
+      resolvedAddr = addr;
+      console.log(`[Broker] Resolved accountID=${accountID} for ${addr}`);
+      break;
     }
   }
 
   if (!(accountID > 0)) {
     throw new Error(
-      `SoDEX accountID not found for ${intent.userAddress}. Open SoDEX testnet, deposit/claim funds, then retry.`,
+      `SoDEX accountID not found for ${intent.userAddress || "wallet"}. ` +
+        `Connect the wallet that owns the SoDEX testnet account (or set SODEX_API_KEY_ADDRESS), deposit/claim funds, then retry.`,
+    );
+  }
+  if (
+    intent.userAddress &&
+    resolvedAddr &&
+    intent.userAddress.toLowerCase() !== resolvedAddr.toLowerCase()
+  ) {
+    console.warn(
+      `[Broker] Wallet ${intent.userAddress} has no SoDEX account — trading account ${resolvedAddr} (#${accountID})`,
     );
   }
 
@@ -231,15 +253,25 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
       }
 
       for (const raw of rawFills) {
-        const isSimulated = raw.message?.includes("Simulated") || raw.message?.includes("configure");
+        const row = raw as { clOrdID: string; status?: string; message?: string; code?: number; orderID?: number };
+        if (typeof row.code === "number" && row.code !== 0) {
+          throw new Error(`SoDEX rejected ${asset.symbol}: code ${row.code} (${row.message ?? row.clOrdID})`);
+        }
+        const isSimulated = row.message?.includes("Simulated") || row.message?.includes("configure");
+        const accepted =
+          row.status === "FILLED" ||
+          row.status === "NEW" ||
+          row.status === "filled" ||
+          (typeof row.code === "number" && row.code === 0) ||
+          !!row.orderID;
         const fill: OrderFill = {
-          orderId: `${raw.clOrdID}-fill`,
-          clOrdID: raw.clOrdID,
+          orderId: row.orderID ? String(row.orderID) : `${row.clOrdID}-fill`,
+          clOrdID: row.clOrdID,
           symbol: `${asset.symbol}/USDC`,
           side: 1,
           fillPrice: price,
           fillQuantity: price > 0 ? assetAllocation / price : 0,
-          status: raw.status === "FILLED" ? "filled" : "new",
+          status: accepted ? "filled" : "new",
           timestamp: new Date().toISOString(),
         };
         fills.push(fill);
@@ -265,10 +297,10 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
   }
 
   // ── Wait briefly for fills to settle then fetch order history ─────────────
-  if (intent.userAddress && accountID > 0) {
+  if (resolvedAddr && accountID > 0) {
     try {
       await new Promise((r) => setTimeout(r, 1000));
-      const history = await getOrderHistory(intent.userAddress, undefined, 5);
+      const history = await getOrderHistory(resolvedAddr, undefined, 5);
       if (history.length > 0) {
         console.log(`[Broker] Confirmed ${history.length} recent orders in account history`);
       }
