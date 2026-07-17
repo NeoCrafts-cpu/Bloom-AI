@@ -21,11 +21,11 @@ export default function CopyTradePage() {
               Copy Trade <span className="orange-gradient-text">Center</span>
             </>
           }
-          subtitle="Connect wallet → set size → EIP-712 sign → Sentinel → SoDEX. Need a strategy first? Pick one from Strategies or run the pipeline."
+          subtitle="1) Pick a strategy → 2) Connect wallet → 3) Set size → sign → Sentinel → SoDEX."
           actions={
-            <Link href="/strategies" className="orange-btn-outline flex items-center gap-2 text-sm px-4 py-2">
+            <Link href="/strategies" className="orange-btn flex items-center gap-2 text-sm px-4 py-2">
               <Layers size={14} />
-              Pick strategy
+              Browse strategies
             </Link>
           }
         />

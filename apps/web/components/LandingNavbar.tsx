@@ -38,7 +38,13 @@ export default function LandingNavbar() {
         </Link>
 
         {/* Desktop — pill capsule absolutely centered */}
-        <div className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-1 bg-bloom-bg-card backdrop-blur-md border border-bloom-border rounded-full px-2 py-1.5">
+        <div
+          className="hidden md:flex absolute left-1/2 -translate-x-1/2 items-center gap-1 rounded-full px-2 py-1.5 border border-white/10 backdrop-blur-xl"
+          style={{
+            background: "rgba(14, 8, 4, 0.55)",
+            boxShadow: "0 4px 24px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.06)",
+          }}
+        >
           {LANDING_LINKS.map((link) => {
             const active = pathname === link.href;
             return (

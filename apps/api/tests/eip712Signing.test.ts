@@ -1,7 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { ethers } from "ethers";
-import { buildTypedSignature, serializeSpotOrder } from "../src/signing/eip712.js";
+import { buildTypedSignature, formatDecimalString, serializeSpotOrder } from "../src/signing/eip712.js";
 
 describe("SoDEX EIP-712 signing dry-run", () => {
   it("produces typedSig with 0x01 prefix and valid payloadHash", async () => {
@@ -18,7 +18,7 @@ describe("SoDEX EIP-712 signing dry-run", () => {
       side: 1,
       type: 2,
       timeInForce: 3,
-      funds: "15.000000",
+      funds: "15",
     });
     const payload = {
       type: "newOrder",
@@ -63,6 +63,14 @@ describe("SoDEX EIP-712 signing dry-run", () => {
 
     if (prevKey === undefined) delete process.env.SODEX_API_PRIVATE_KEY;
     else process.env.SODEX_API_PRIVATE_KEY = prevKey;
+  });
+
+  it("formatDecimalString strips trailing zeros for SoDEX DecimalString", () => {
+    assert.equal(formatDecimalString(15, 6), "15");
+    assert.equal(formatDecimalString(15.1, 6), "15.1");
+    assert.equal(formatDecimalString(0.5, 6), "0.5");
+    assert.equal(formatDecimalString(12.3456789, 6), "12.345678");
+    assert.equal(formatDecimalString(0, 6), "0");
   });
 
   it("X-API-Key must be key name not address", () => {

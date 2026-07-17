@@ -131,11 +131,14 @@ export function serializeSpotOrder(order: {
   return result;
 }
 
-/** Format a decimal string to max precision without exceeding tick (floor). */
+/**
+ * Format a DecimalString for SoDEX: floor to precision, then strip trailing zeros.
+ * SoDEX rejects padded forms like "15.000000" / "0.500" — use "15" / "0.5".
+ */
 export function formatDecimalString(value: number, precision: number): string {
   if (!Number.isFinite(value) || value <= 0) return "0";
   const p = Math.max(0, Math.min(18, Math.floor(precision)));
   const factor = 10 ** p;
   const floored = Math.floor(value * factor + 1e-12) / factor;
-  return floored.toFixed(p);
+  return parseFloat(floored.toFixed(p)).toString();
 }

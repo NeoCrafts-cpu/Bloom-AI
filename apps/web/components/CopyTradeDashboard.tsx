@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAccount, useConnect, useDisconnect, useSignTypedData } from "wagmi";
 import { injected } from "wagmi/connectors";
-import { Wallet, Shield, Zap, CheckCircle, XCircle, Loader, ExternalLink } from "lucide-react";
-import type { CopyTradeIntent, CopyTradeResult, SentinelReport } from "@bloom-ai/types";
+import { Wallet, Shield, Zap, CheckCircle, XCircle, Loader, ExternalLink, Layers, ArrowRight } from "lucide-react";
+import type { CopyTradeIntent, CopyTradeResult, SentinelReport, SSIIndex } from "@bloom-ai/types";
 import SentinelAlert from "./SentinelAlert";
 import OrderFeedPanel from "./OrderFeedPanel";
 import { valueChainTestnet } from "@/lib/wagmi";
@@ -27,6 +28,7 @@ const AUTHORIZATION_TYPES = {
 const API = "";
 
 export default function CopyTradeDashboard() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const strategyId = searchParams?.get("strategy") ?? "";
 
@@ -52,6 +54,33 @@ export default function CopyTradeDashboard() {
   const [usdcBalance, setUsdcBalance]       = useState<number | null>(null);
   const [balanceLoading, setBalanceLoading] = useState(false);
   const [execError, setExecError]           = useState<string | null>(null);
+  const [strategies, setStrategies]         = useState<SSIIndex[]>([]);
+  const [strategiesLoading, setStrategiesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setStrategiesLoading(true);
+      try {
+        const res = await fetch(`${API}/api/strategies`);
+        const json = res.ok ? await res.json() : null;
+        if (!cancelled) setStrategies(Array.isArray(json?.data) ? json.data : []);
+      } catch {
+        if (!cancelled) setStrategies([]);
+      } finally {
+        if (!cancelled) setStrategiesLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const selectedStrategy = strategies.find((s) => s.id === strategyId) ?? null;
+
+  const selectStrategy = (id: string) => {
+    const params = new URLSearchParams(searchParams?.toString() ?? "");
+    params.set("strategy", id);
+    router.push(`/copy-trade?${params.toString()}`);
+  };
 
   // If wallet connects externally, advance step + fetch balance
   useEffect(() => {
@@ -289,10 +318,116 @@ export default function CopyTradeDashboard() {
       {/* Left — wizard steps */}
       <div className="lg:col-span-2 space-y-5">
 
-        {/* Step 1 — Connect Wallet */}
-        <StepCard step={1} title="Connect Wallet" icon={Wallet}
-          active={step === "connect"} completed={step !== "connect"}>
-          {step === "connect" ? (
+        {/* Step 1 — Pick Strategy (always first, always visible) */}
+        <StepCard
+          step={1}
+          title="Pick a Strategy"
+          icon={Layers}
+          active={!strategyId}
+          completed={Boolean(strategyId)}
+          forceShow
+        >
+          {strategyId && selectedStrategy ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <code className="text-xs font-mono text-bloom-orange">{selectedStrategy.symbol}</code>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full border border-emerald-800/40 text-emerald-400 bg-emerald-900/20">
+                    Selected
+                  </span>
+                </div>
+                <p className="text-base font-bold text-bloom-text">{selectedStrategy.name}</p>
+                <p className="text-xs text-bloom-text-muted mt-1 line-clamp-2">
+                  {(Array.isArray(selectedStrategy.assets) ? selectedStrategy.assets : [])
+                    .slice(0, 5)
+                    .map((a) => `${a.symbol} ${(a.weight * 100).toFixed(0)}%`)
+                    .join(" · ")}
+                </p>
+              </div>
+              <div className="flex gap-2 shrink-0">
+                <Link href={`/strategies/${strategyId}`} className="orange-btn-outline text-xs px-3 py-2">
+                  Review
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => router.push("/copy-trade")}
+                  className="text-xs text-bloom-text-muted hover:text-bloom-orange px-2"
+                >
+                  Change
+                </button>
+              </div>
+            </div>
+          ) : strategyId ? (
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-bloom-orange">{strategyId.toUpperCase()}</p>
+                <p className="text-xs text-bloom-text-muted mt-1">Strategy selected — continue below.</p>
+              </div>
+              <button type="button" onClick={() => router.push("/copy-trade")} className="orange-btn-outline text-xs px-3 py-2">
+                Change
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-bloom-text-muted">
+                Choose which SSI basket to copy on SoDEX. This is required before you can sign or execute.
+              </p>
+              {strategiesLoading ? (
+                <div className="h-20 shimmer rounded-xl" />
+              ) : strategies.length === 0 ? (
+                <div className="rounded-xl border border-amber-800/30 bg-amber-950/20 p-4 space-y-3">
+                  <p className="text-sm text-amber-400 font-semibold">No strategies yet</p>
+                  <p className="text-xs text-bloom-text-muted">
+                    Run the agent pipeline on Home, then come back — or open Strategies to mint one.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Link href="/dashboard" className="orange-btn text-xs px-4 py-2">Run pipeline</Link>
+                    <Link href="/strategies" className="orange-btn-outline text-xs px-4 py-2">Open Strategies</Link>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                  {strategies.map((s) => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      onClick={() => selectStrategy(s.id)}
+                      className="w-full text-left rounded-xl border border-bloom-border hover:border-bloom-border-hover hover:bg-white/5 p-3 transition-all group"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <code className="text-[10px] font-mono text-bloom-orange">{s.symbol}</code>
+                            <span className="text-sm font-semibold text-bloom-text truncate">{s.name}</span>
+                          </div>
+                          <p className="text-[11px] text-bloom-text-muted mt-0.5 truncate">
+                            {(Array.isArray(s.assets) ? s.assets : [])
+                              .slice(0, 4)
+                              .map((a) => a.symbol)
+                              .join(" · ")}
+                          </p>
+                        </div>
+                        <ArrowRight size={14} className="text-bloom-text-muted group-hover:text-bloom-orange shrink-0" />
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              <Link href="/strategies" className="inline-flex items-center gap-1.5 text-xs text-bloom-orange hover:underline">
+                Browse full Strategies page <ArrowRight size={12} />
+              </Link>
+            </div>
+          )}
+        </StepCard>
+
+        {/* Step 2 — Connect Wallet */}
+        <StepCard step={2} title="Connect Wallet" icon={Wallet}
+          active={Boolean(strategyId) && step === "connect"}
+          completed={step !== "connect"}
+          disabled={!strategyId}>
+          {!strategyId ? (
+            <p className="text-xs text-bloom-text-muted">Pick a strategy above first.</p>
+          ) : step === "connect" ? (
             <div className="space-y-4">
               <p className="text-sm text-bloom-text-muted">
                 Connect your EVM wallet (MetaMask or any injected provider) to authorize copy-trade execution on{" "}
@@ -335,24 +470,13 @@ export default function CopyTradeDashboard() {
           )}
         </StepCard>
 
-        {/* Step 2 — Configure */}
-        <StepCard step={2} title="Configure Strategy" icon={Zap}
+        {/* Step 3 — Configure */}
+        <StepCard step={3} title="Set Size & Venue" icon={Zap}
           active={step === "configure"}
           completed={["signing", "sentinel", "executing", "complete", "blocked"].includes(step)}
-          disabled={step === "connect"}>
+          disabled={!strategyId || step === "connect"}>
           {step === "configure" && (
             <div className="space-y-5">
-              <div className="glass-card p-4 border-bloom-border-hover">
-                <p className="text-xs text-bloom-text-muted mb-1 uppercase tracking-wider font-semibold">Strategy</p>
-                <p className="text-sm font-bold text-bloom-orange">
-                  {strategyId ? strategyId.toUpperCase() : "NO STRATEGY SELECTED"}
-                </p>
-                {!strategyId && (
-                  <p className="text-xs text-bloom-text-muted mt-2">
-                    Run the agent pipeline, then open copy trade from a generated strategy.
-                  </p>
-                )}
-              </div>
               {/* Allocation guidance — conservative defaults, no fabricated win rates */}
               <div className="glass-card p-4 border border-bloom-border-hover bg-gradient-to-br from-amber-950/20 to-bloom-bg-2/60">
                 <p className="text-xs font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
@@ -518,9 +642,9 @@ export default function CopyTradeDashboard() {
           )}
         </StepCard>
 
-        {/* Step 3 — Signing */}
+        {/* Step 4 — Signing */}
         {["signing", "sentinel", "executing", "complete"].includes(step) && (
-          <StepCard step={3} title="EIP-712 Wallet Signature" icon={Shield}
+          <StepCard step={4} title="EIP-712 Wallet Signature" icon={Shield}
             active={step === "signing"}
             completed={["sentinel", "executing", "complete"].includes(step)}>
             {userSignature ? (
@@ -541,18 +665,18 @@ export default function CopyTradeDashboard() {
           </StepCard>
         )}
 
-        {/* Step 4 — Sentinel */}
+        {/* Step 5 — Sentinel */}
         {sentinelReport && (
-          <StepCard step={4} title="Sentinel Risk Check" icon={Shield}
+          <StepCard step={5} title="Sentinel Risk Check" icon={Shield}
             active={step === "sentinel"}
             completed={["executing", "complete"].includes(step)}>
             <SentinelAlert report={sentinelReport} />
           </StepCard>
         )}
 
-        {/* Step 5 — Execution Result */}
+        {/* Step 6 — Execution Result */}
         {tradeResult && step === "complete" && (
-          <StepCard step={5} title="Execution Complete" icon={CheckCircle}
+          <StepCard step={6} title="Execution Complete" icon={CheckCircle}
             active={false} completed>
             <div className="space-y-3">
               <div className="flex items-center gap-2 flex-wrap">
@@ -637,12 +761,14 @@ export default function CopyTradeDashboard() {
 // --- StepCard -----------------------------------------------------------------
 
 function StepCard({
-  step, title, icon: Icon, active, completed, disabled, children,
+  step, title, icon: Icon, active, completed, disabled, forceShow, children,
 }: {
   step: number; title: string;
   icon: React.FC<{ size: number; className?: string }>;
-  active: boolean; completed: boolean; disabled?: boolean; children?: React.ReactNode;
+  active: boolean; completed: boolean; disabled?: boolean; forceShow?: boolean;
+  children?: React.ReactNode;
 }) {
+  const showBody = forceShow || active || completed;
   return (
     <div className={`glass-card p-5 transition-all duration-300 ${
       active    ? "border-bloom-border-hover shadow-orange-glow" :
@@ -658,13 +784,13 @@ function StepCard({
           {completed ? <CheckCircle size={14} /> : step}
         </div>
         <div className="flex items-center gap-2">
-          <Icon size={14} className={active ? "text-bloom-orange" : "text-bloom-text-muted"} />
-          <span className={`text-sm font-semibold ${active ? "text-bloom-text" : "text-bloom-text-muted"}`}>
+          <Icon size={14} className={active || forceShow ? "text-bloom-orange" : "text-bloom-text-muted"} />
+          <span className={`text-sm font-semibold ${active || forceShow ? "text-bloom-text" : "text-bloom-text-muted"}`}>
             {title}
           </span>
         </div>
       </div>
-      {(active || completed) && children}
+      {showBody && children}
     </div>
   );
 }
