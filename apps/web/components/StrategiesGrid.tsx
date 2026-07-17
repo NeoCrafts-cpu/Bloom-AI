@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Layers, ArrowUpRight, Play, AlertCircle } from "lucide-react";
+import { Layers, ArrowUpRight, Play, AlertCircle, Eye } from "lucide-react";
 import type { SSIIndex } from "@bloom-ai/types";
 
 export default function StrategiesGrid() {
@@ -20,7 +20,10 @@ export default function StrategiesGrid() {
           const data = await res.json();
           const list = Array.isArray(data?.data) ? data.data : [];
           setStrategies(list);
-          setEmptyMessage(data?.meta?.message ?? (list.length === 0 ? "Run the agent pipeline to generate strategies" : null));
+          setEmptyMessage(
+            data?.meta?.message ??
+              (list.length === 0 ? "Run the agent pipeline to generate strategies" : null),
+          );
         } else {
           setStrategies([]);
           setEmptyMessage("Strategy API unavailable");
@@ -52,13 +55,19 @@ export default function StrategiesGrid() {
         <div>
           <h3 className="text-base font-bold text-bloom-text mb-1">No strategies yet</h3>
           <p className="text-sm text-bloom-text-muted max-w-md">
-            {emptyMessage ?? "Run the full agent pipeline on the dashboard to generate an SSI index from live SoSoValue and SoDEX data."}
+            {emptyMessage ??
+              "Run the agent pipeline below (or on Home) to mint an SSI basket from live SoSoValue + SoDEX data."}
           </p>
         </div>
-        <Link href="/dashboard" className="orange-btn flex items-center gap-2 text-sm px-5 py-2.5">
-          <Play size={14} />
-          Go to Dashboard
-        </Link>
+        <div className="flex flex-wrap items-center justify-center gap-2">
+          <Link href="/dashboard" className="orange-btn flex items-center gap-2 text-sm px-5 py-2.5">
+            <Play size={14} />
+            Run pipeline on Home
+          </Link>
+          <Link href="/research" className="orange-btn-outline flex items-center gap-2 text-sm px-5 py-2.5">
+            Browse Discover
+          </Link>
+        </div>
       </div>
     );
   }
@@ -70,26 +79,28 @@ export default function StrategiesGrid() {
           key={strategy.id}
           initial={{ opacity: 0, y: 24 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: i * 0.1, ease: [0.25, 0.46, 0.45, 0.94] }}
-          whileHover={{ y: -5, boxShadow: "0 8px 40px rgba(232,97,10,0.18)" }}
+          transition={{ duration: 0.45, delay: i * 0.08, ease: [0.25, 0.46, 0.45, 0.94] }}
+          whileHover={{ y: -4 }}
           className="glass-card p-6 flex flex-col gap-4"
         >
-          <div className="flex items-start justify-between">
-            <div>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-7 h-7 rounded-lg bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
+                <div className="w-7 h-7 rounded-lg bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center shrink-0">
                   <Layers size={12} className="text-bloom-orange" />
                 </div>
-                <code className="text-xs font-mono text-bloom-orange">{strategy.symbol}</code>
+                <code className="text-xs font-mono text-bloom-orange truncate">{strategy.symbol}</code>
               </div>
               <h3 className="text-base font-bold text-bloom-text">{strategy.name}</h3>
             </div>
-            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border text-emerald-400 bg-emerald-900/20 border-emerald-800/30">
-              Pipeline generated
+            <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full border text-emerald-400 bg-emerald-900/20 border-emerald-800/30 shrink-0">
+              Live
             </span>
           </div>
 
-          <p className="text-xs text-bloom-text-muted leading-relaxed">{strategy.description}</p>
+          <p className="text-xs text-bloom-text-muted leading-relaxed line-clamp-3">
+            {strategy.description}
+          </p>
 
           <div>
             <p className="text-xs font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
@@ -105,7 +116,10 @@ export default function StrategiesGrid() {
                   <span className="text-xs font-mono text-bloom-text-muted shrink-0">
                     {asset.symbol} — {(asset.weight * 100).toFixed(0)}%
                     {asset.currentPrice > 0 && (
-                      <span className="text-bloom-text/70"> · ${asset.currentPrice.toLocaleString()}</span>
+                      <span className="text-bloom-text/70">
+                        {" "}
+                        · ${asset.currentPrice.toLocaleString()}
+                      </span>
                     )}
                   </span>
                 </div>
@@ -115,26 +129,35 @@ export default function StrategiesGrid() {
 
           <div className="flex items-center justify-between pt-3 border-t border-bloom-border text-xs text-bloom-text-muted">
             <span>
-              TVL:{" "}
+              Assets:{" "}
               <span className="text-bloom-text font-semibold">
-                {strategy.tvl > 0 ? `$${(strategy.tvl / 1e6).toFixed(2)}M` : "— (starts at $0)"}
+                {Array.isArray(strategy.assets) ? strategy.assets.length : 0}
               </span>
             </span>
             <span>
-              Rebalanced:{" "}
+              Updated:{" "}
               <span className="text-bloom-text font-semibold">
                 {new Date(strategy.rebalancedAt).toLocaleDateString()}
               </span>
             </span>
           </div>
 
-          <Link
-            href={`/copy-trade?strategy=${strategy.id}`}
-            className="orange-btn flex items-center justify-center gap-2 text-sm w-full"
-          >
-            Copy On-Chain
-            <ArrowUpRight size={14} />
-          </Link>
+          <div className="grid grid-cols-2 gap-2">
+            <Link
+              href={`/strategies/${strategy.id}`}
+              className="orange-btn-outline flex items-center justify-center gap-1.5 text-sm py-2.5"
+            >
+              <Eye size={14} />
+              Review
+            </Link>
+            <Link
+              href={`/copy-trade?strategy=${strategy.id}`}
+              className="orange-btn flex items-center justify-center gap-1.5 text-sm py-2.5"
+            >
+              Trade
+              <ArrowUpRight size={14} />
+            </Link>
+          </div>
         </motion.div>
       ))}
     </div>

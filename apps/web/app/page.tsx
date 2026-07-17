@@ -105,12 +105,12 @@ export default function HomePage() {
               transition={{ duration: 0.55, delay: 0.52, ease }}
               className="flex flex-col sm:flex-row items-center lg:items-start gap-4 mb-12"
             >
-              <Link href="/research" className="orange-btn flex items-center gap-2 text-base px-8 py-3">
-                <LineChart size={18} />
-                Open Research
+              <Link href="/dashboard" className="orange-btn flex items-center gap-2 text-base px-8 py-3">
+                <Zap size={18} />
+                Open App
               </Link>
-              <Link href="/terminal" className="orange-btn-outline flex items-center gap-2 text-base px-8 py-3">
-                Launch Terminal
+              <Link href="/research" className="orange-btn-outline flex items-center gap-2 text-base px-8 py-3">
+                Discover signals
                 <ArrowUpRight size={18} />
               </Link>
             </motion.div>

@@ -1,35 +1,38 @@
 "use client";
 
-import { motion } from "framer-motion";
+import Link from "next/link";
+import { Plus } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import StrategiesGrid from "@/components/StrategiesGrid";
-
-const ease = [0.25, 0.46, 0.45, 0.94] as const;
+import AgentStatusBar from "@/components/AgentStatusBar";
+import { PageHeader } from "@/components/PageHeader";
 
 export default function StrategiesPage() {
   return (
     <div className="min-h-screen bg-bloom-bg">
       <Navbar />
-      <div className="pt-28 px-4 pb-10 max-w-7xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease }}
-          className="mt-4 mb-8"
-        >
-          <div className="pill-badge mb-2">SSI Protocol</div>
-          <h1 className="text-3xl font-bold text-bloom-text">On-Chain Strategies</h1>
-          <p className="text-bloom-text-muted text-sm mt-1">
-            AI-minted Wrapped Token indices. One click to copy the exact portfolio on-chain via SoDEX.
-          </p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.2, ease }}
-        >
-          <StrategiesGrid />
-        </motion.div>
+      <div className="pt-24 px-4 pb-12 max-w-7xl mx-auto">
+        <PageHeader
+          eyebrow="Step 2 · SSI baskets"
+          title={
+            <>
+              Choose a <span className="orange-gradient-text">strategy</span>
+            </>
+          }
+          subtitle="Review AI-minted portfolios, compare weights, then open Trade to execute on SoDEX with Sentinel checks."
+          actions={
+            <Link href="/strategies/studio" className="orange-btn-outline flex items-center gap-2 text-sm px-4 py-2">
+              <Plus size={14} />
+              Studio
+            </Link>
+          }
+        />
+
+        <div className="mb-8">
+          <AgentStatusBar />
+        </div>
+
+        <StrategiesGrid />
       </div>
     </div>
   );

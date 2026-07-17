@@ -5,6 +5,7 @@ import ForceRefreshButton from "@/components/ForceRefreshButton";
 import Navbar from "@/components/Navbar";
 import ETFFlowsPanel from "@/components/ETFFlowsPanel";
 import SoSoNewsPanel from "@/components/SoSoNewsPanel";
+import { PageHeader } from "@/components/PageHeader";
 
 export const metadata = {
   title: "Terminal | Bloom AI",
@@ -13,39 +14,28 @@ export const metadata = {
 
 export default function TerminalPage() {
   return (
-    <main className="min-h-screen bg-bloom-bg pt-28">
+    <main className="min-h-screen bg-bloom-bg pt-24">
       <Navbar />
-      {/* Agent status bar */}
-      <AgentStatusBar />
 
-      {/* Market ticker */}
-      <MarketTicker />
+      <div className="max-w-[1400px] mx-auto px-4 pb-12">
+        <PageHeader
+          eyebrow="News · Intelligence"
+          live
+          title={
+            <>
+              Smart Money <span className="orange-gradient-text">Terminal</span>
+            </>
+          }
+          subtitle="AI newsletters from SoSoValue data. Run the pipeline, then browse strategies when a narrative is clear."
+          actions={<ForceRefreshButton />}
+        />
 
-      {/* Main terminal feed */}
-      <div className="max-w-[1400px] mx-auto px-4 py-6">
-        {/* Header */}
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="live-dot" />
-              <span className="text-xs font-mono text-bloom-orange uppercase tracking-widest">
-                Live Intelligence Feed
-              </span>
-            </div>
-            <h1 className="text-2xl font-bold text-bloom-text">
-              Smart Money{" "}
-              <span className="orange-gradient-text">Terminal</span>
-            </h1>
-            <p className="text-sm text-bloom-text-muted mt-1">
-              AI-generated institutional newsletters powered by SoSoValue data
-            </p>
-          </div>
-
-          {/* Trigger manual refresh */}
-          <ForceRefreshButton />
+        <div className="mb-4">
+          <AgentStatusBar />
         </div>
+        <MarketTicker />
 
-        <div className="grid grid-cols-1 xl:grid-cols-4 gap-5">
+        <div className="grid grid-cols-1 xl:grid-cols-4 gap-5 mt-6">
           <div className="xl:col-span-3">
             <TerminalFeedClient />
           </div>

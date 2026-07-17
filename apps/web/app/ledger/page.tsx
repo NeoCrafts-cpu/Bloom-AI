@@ -5,10 +5,11 @@ import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  Shield, Zap, ExternalLink, RefreshCw, AlertCircle,
+  Zap, ExternalLink, RefreshCw, AlertCircle,
   CheckCircle, XCircle, Clock, FileText,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { PageHeader } from "@/components/PageHeader";
 import type { VerifiedSignal, SignalOutcome, LedgerStats } from "@bloom-ai/types";
 
 const SOURCE_LABELS: Record<string, string> = {
@@ -102,24 +103,21 @@ function LedgerContent() {
     <div className="min-h-screen bg-bloom-bg">
       <Navbar />
       <main className="pt-24 pb-10 px-4 md:px-6 max-w-[1400px] mx-auto">
-        <div className="mb-6 flex items-center justify-between">
-          <div>
-            <div className="pill-badge-orange w-fit mb-2">
-              <Shield size={10} />
-              Proof Layer
-            </div>
-            <h1 className="text-2xl font-bold text-bloom-text">
+        <PageHeader
+          eyebrow="Proof layer"
+          title={
+            <>
               Verified Signal <span className="orange-gradient-text">Ledger</span>
-            </h1>
-            <p className="text-sm text-bloom-text-muted mt-0.5">
-              Full lifecycle from SoSoValue evidence → AI thesis → strategy → Sentinel → execution → outcome
-            </p>
-          </div>
-          <button onClick={fetchLedger} className="orange-btn-outline flex items-center gap-2 text-xs px-4 py-2">
-            <RefreshCw size={12} />
-            Refresh
-          </button>
-        </div>
+            </>
+          }
+          subtitle="Full lifecycle: SoSoValue evidence → AI thesis → strategy → Sentinel → execution → outcome."
+          actions={
+            <button onClick={fetchLedger} className="orange-btn-outline flex items-center gap-2 text-xs px-4 py-2">
+              <RefreshCw size={12} />
+              Refresh
+            </button>
+          }
+        />
 
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">

@@ -3,9 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import {
-  TrendingUp, Activity, BarChart3, ExternalLink, RefreshCw, Trophy, Zap, Shield,
+  TrendingUp, Activity, BarChart3, ExternalLink, RefreshCw, Zap, Shield,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { PageHeader } from "@/components/PageHeader";
 import { VALUECHAIN_TESTNET, SODEX_TESTNET_TRADE_URL, isOnChainTxHash } from "@/lib/valuechain";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
@@ -111,30 +112,26 @@ export default function PerformancePage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen pt-28 pb-16 px-4 max-w-6xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease }}
-          className="flex items-start justify-between mb-8"
-        >
-          <div>
-            <div className="pill-badge-orange mb-3">
-              <Trophy size={11} /> PERFORMANCE ANALYTICS
-            </div>
-            <h1 className="text-3xl font-bold text-bloom-text">Strategy Performance</h1>
-            <p className="text-bloom-text-muted text-sm mt-1">
-              Verified session trades only — no simulated KPIs or fabricated win rates
-            </p>
-          </div>
-          <button
-            onClick={fetchData}
-            className="orange-btn-outline flex items-center gap-2 text-sm px-4 py-2 mt-1"
-          >
-            <RefreshCw size={13} />
-            Refresh
-          </button>
-        </motion.div>
+      <main className="min-h-screen pt-24 pb-16 px-4 max-w-6xl mx-auto">
+        <PageHeader
+          eyebrow="Step 4 · Results"
+          live
+          title={
+            <>
+              Strategy <span className="orange-gradient-text">performance</span>
+            </>
+          }
+          subtitle="Verified session trades and mark-to-market from SoDEX — no simulated KPIs or fabricated win rates."
+          actions={
+            <button
+              onClick={fetchData}
+              className="orange-btn-outline flex items-center gap-2 text-sm px-4 py-2"
+            >
+              <RefreshCw size={13} />
+              Refresh
+            </button>
+          }
+        />
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-8">
           <KpiCard
@@ -210,11 +207,14 @@ export default function PerformancePage() {
           ) : trades.length === 0 ? (
             <div className="text-center py-12 text-bloom-text-muted">
               <Activity size={32} className="mx-auto mb-3 text-bloom-border" />
-              <p className="text-sm">No executed trades yet.</p>
-              <p className="text-xs mt-1">
-                Run the agent pipeline, then confirm a copy-trade on{" "}
-                <a href="/copy-trade" className="text-bloom-orange hover:underline">Copy Trade</a>.
+              <p className="text-sm font-semibold text-bloom-text mb-1">No executed trades yet</p>
+              <p className="text-xs max-w-sm mx-auto mb-4">
+                Run the agent pipeline on Home, pick a strategy, then execute on Trade.
               </p>
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <a href="/strategies" className="orange-btn-outline text-xs px-4 py-2">Browse strategies</a>
+                <a href="/copy-trade" className="orange-btn text-xs px-4 py-2">Go to Trade</a>
+              </div>
             </div>
           ) : (
             <div className="overflow-x-auto">

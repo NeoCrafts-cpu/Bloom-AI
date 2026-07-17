@@ -9,6 +9,7 @@ import {
   Minus, AlertCircle, Zap,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { PageHeader } from "@/components/PageHeader";
 import { panelStatusLabel, type PanelDataStatus } from "@/lib/api";
 
 // Client-only components
@@ -683,11 +684,16 @@ export default function ResearchPage() {
       <Navbar />
 
       <main className="pt-24 pb-10 px-4 md:px-6 max-w-[1400px] mx-auto">
-        {/* ── Page header ─────────────────────────────────────────────────── */}
-        <div className="mb-5">
-          <h1 className="text-2xl font-bold text-bloom-text">Research</h1>
-          <p className="text-sm text-bloom-text-muted mt-0.5">AI-powered technical analysis &amp; signals</p>
-        </div>
+        <PageHeader
+          eyebrow="Step 1 · Discover"
+          live
+          title={
+            <>
+              Research <span className="orange-gradient-text">workspace</span>
+            </>
+          }
+          subtitle="Charts, signals, order book, and institutional flows — then move to Strategies when you have a thesis."
+        />
 
         {/* ── Symbol · Interval · AI Analysis ───────────────────────────── */}
         <div className="flex items-center gap-2 flex-wrap mb-5">

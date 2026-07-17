@@ -9,6 +9,7 @@ import {
   AlertCircle, Zap, ExternalLink,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { PageHeader } from "@/components/PageHeader";
 import type { SSIIndex, SSIRebalanceEvent, IndexComparison, SoSoSsiComparison } from "@bloom-ai/types";
 
 function StrategyDetailContent() {
@@ -158,26 +159,30 @@ function StrategyDetailContent() {
     <div className="min-h-screen bg-bloom-bg">
       <Navbar />
       <main className="pt-24 pb-10 px-4 md:px-6 max-w-[1200px] mx-auto">
-        <div className="mb-6 flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Layers size={14} className="text-bloom-orange" />
-              <code className="text-xs font-mono text-bloom-orange">{strategy.symbol}</code>
-              <span className="text-[10px] px-2 py-0.5 rounded-full border border-bloom-border text-bloom-text-muted uppercase">
-                {strategy.status ?? "published"}
-              </span>
+        <PageHeader
+          eyebrow={`Step 2 · ${strategy.symbol}`}
+          title={strategy.name}
+          subtitle={strategy.description}
+          actions={
+            <div className="flex gap-2">
+              <Link href={`/strategies/studio?edit=${id}`} className="orange-btn-outline text-xs px-3 py-2 flex items-center gap-1">
+                Edit in Studio
+              </Link>
+              <Link href={`/copy-trade?strategy=${id}`} className="orange-btn text-xs px-3 py-2 flex items-center gap-1">
+                <Zap size={12} /> Trade this
+              </Link>
             </div>
-            <h1 className="text-2xl font-bold text-bloom-text">{strategy.name}</h1>
-            <p className="text-sm text-bloom-text-muted mt-1 max-w-2xl">{strategy.description}</p>
-          </div>
-          <div className="flex gap-2 shrink-0">
-            <Link href={`/strategies/studio?edit=${id}`} className="orange-btn-outline text-xs px-3 py-2 flex items-center gap-1">
-              Edit in Studio
-            </Link>
-            <Link href={`/copy-trade?strategy=${id}`} className="orange-btn text-xs px-3 py-2 flex items-center gap-1">
-              <Zap size={12} /> Copy Trade
-            </Link>
-          </div>
+          }
+        />
+        <div className="flex items-center gap-2 mb-6 -mt-2">
+          <Layers size={14} className="text-bloom-orange" />
+          <code className="text-xs font-mono text-bloom-orange">{strategy.symbol}</code>
+          <span className="text-[10px] px-2 py-0.5 rounded-full border border-bloom-border text-bloom-text-muted uppercase">
+            {strategy.status ?? "published"}
+          </span>
+          <Link href="/strategies" className="text-xs text-bloom-text-muted hover:text-bloom-orange ml-auto">
+            ← All strategies
+          </Link>
         </div>
 
         {nonTradable.length > 0 && (

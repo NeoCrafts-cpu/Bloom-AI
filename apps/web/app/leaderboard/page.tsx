@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Trophy, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import Navbar from "@/components/Navbar";
+import { PageHeader } from "@/components/PageHeader";
 
 interface Row {
   userAddress: string;
@@ -29,18 +30,16 @@ export default function LeaderboardPage() {
   return (
     <div className="min-h-screen bg-bloom-bg">
       <Navbar />
-      <main className="pt-28 pb-12 px-4 max-w-4xl mx-auto">
-        <div className="mb-8">
-          <div className="pill-badge-orange w-fit mb-2">
-            <Trophy size={10} /> Social Copy
-          </div>
-          <h1 className="text-3xl font-bold text-bloom-text">
-            Copy <span className="orange-gradient-text">Leaderboard</span>
-          </h1>
-          <p className="text-sm text-bloom-text-muted mt-1">
-            Ranked by verified executed notional — no fabricated win rates
-          </p>
-        </div>
+      <main className="pt-24 pb-12 px-4 max-w-4xl mx-auto">
+        <PageHeader
+          eyebrow="Social"
+          title={
+            <>
+              Copy <span className="orange-gradient-text">Leaderboard</span>
+            </>
+          }
+          subtitle="Ranked by verified executed notional — no fabricated win rates."
+        />
 
         {loading ? (
           <div className="flex justify-center py-20">

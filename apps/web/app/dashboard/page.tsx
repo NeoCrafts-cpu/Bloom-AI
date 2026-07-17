@@ -6,16 +6,16 @@ import { motion } from "framer-motion";
 import Link from "next/link";
 import {
   TrendingUp, TrendingDown, Activity, BarChart3, Layers,
-  Zap, ArrowUpRight, RefreshCw, Brain, Shield, Globe,
+  Zap, ArrowUpRight, RefreshCw, Brain, Globe, ChevronDown, LineChart,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
 import AgentStatusBar from "@/components/AgentStatusBar";
 import MarketTicker from "@/components/MarketTicker";
 import ETFFlowsPanel from "@/components/ETFFlowsPanel";
+import { PageHeader } from "@/components/PageHeader";
 import type { MarketSnapshot, ETFFlowData, SmartMoneyNewsletter } from "@bloom-ai/types";
 import { panelStatusLabel, PANEL_STATUS_STYLES, type PanelDataStatus } from "@/lib/api";
 
-// All new data-heavy / chart / WS components are client-only
 const PriceKlinesChart  = dynamic(() => import("@/components/PriceKlinesChart"),  { ssr: false });
 const ETFHistoryChart   = dynamic(() => import("@/components/ETFHistoryChart"),   { ssr: false });
 const DefiTVLPanel      = dynamic(() => import("@/components/DefiTVLPanel"),      { ssr: false });
@@ -28,6 +28,13 @@ const AlertsPanel = dynamic(() => import("@/components/AlertsPanel"), { ssr: fal
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 const API = "";
+
+const JOURNEY = [
+  { step: "1", title: "Discover", desc: "Signals & charts", href: "/research", icon: LineChart },
+  { step: "2", title: "Strategies", desc: "Pick an SSI basket", href: "/strategies", icon: Layers },
+  { step: "3", title: "Trade", desc: "Execute on SoDEX", href: "/copy-trade", icon: Zap },
+  { step: "4", title: "Results", desc: "Fills & performance", href: "/performance", icon: BarChart3 },
+];
 
 function StatusBadge({ status }: { status: PanelDataStatus }) {
   const style = PANEL_STATUS_STYLES[status] ?? PANEL_STATUS_STYLES.unavailable;
@@ -46,12 +53,12 @@ function fmt(n: number, decimals = 2) {
 }
 
 export default function DashboardPage() {
-  const [prices, setPrices]       = useState<MarketSnapshot[]>([]);
-  const [etf, setEtf]             = useState<ETFFlowData[]>([]);
-  const [newsletters, setNews]    = useState<SmartMoneyNewsletter[]>([]);
+  const [prices, setPrices] = useState<MarketSnapshot[]>([]);
+  const [etf, setEtf] = useState<ETFFlowData[]>([]);
+  const [newsletters, setNews] = useState<SmartMoneyNewsletter[]>([]);
   const [pricesStatus, setPricesStatus] = useState<PanelDataStatus>("unavailable");
-  const [etfStatus, setEtfStatus] = useState<PanelDataStatus>("unavailable");
   const [refreshing, setRefreshing] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const fetchAll = useCallback(async () => {
     setRefreshing(true);
@@ -69,14 +76,9 @@ export default function DashboardPage() {
       }),
       fetch(`${API}/api/market/etf-flows`).then(async (r) => {
         const j = await r.json();
-        if (!r.ok) {
-          setEtfStatus("unavailable");
-          return;
-        }
+        if (!r.ok) return;
         const list = Array.isArray(j?.data) ? j.data : Array.isArray(j) ? j : [];
         setEtf(list);
-        const metaStatus = j?.meta?.status as PanelDataStatus | undefined;
-        setEtfStatus(metaStatus ?? (list.length ? "live" : "empty"));
       }),
       fetch(`${API}/api/newsletters?limit=4`).then(async (r) => {
         if (!r.ok) return;
@@ -101,55 +103,56 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen bg-bloom-bg">
       <Navbar />
-      <div className="pt-28 max-w-[1400px] mx-auto px-4 pb-12">
+      <div className="pt-24 max-w-[1400px] mx-auto px-4 pb-12">
+        <PageHeader
+          showFlow={false}
+          eyebrow="Home"
+          live
+          title={
+            <>
+              Start here — <span className="orange-gradient-text">then trade</span>
+            </>
+          }
+          subtitle="Run the agent pipeline, pick a strategy, execute on SoDEX. Deeper market tools live under Discover."
+          actions={
+            <button
+              onClick={fetchAll}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-4 py-2 rounded-xl border border-bloom-border text-sm text-bloom-text-muted hover:text-bloom-text hover:border-bloom-border-hover transition-all disabled:opacity-50"
+            >
+              <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
+              Refresh
+            </button>
+          }
+        />
 
-        {/* Page header */}
-        <motion.div
-          initial={{ opacity: 0, y: -16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, ease }}
-          className="flex items-center justify-between mt-6 mb-6"
-        >
-          <div>
-            <div className="pill-badge-orange mb-2 w-fit">
-              <span className="live-dot" />
-              Market Dashboard
-            </div>
-            <h1 className="text-3xl font-bold text-bloom-text">
-              Market{" "}
-              <span className="orange-gradient-text">Dashboard</span>
-            </h1>
-            <p className="text-bloom-text-muted text-sm mt-1">
-              Real-time crypto prices · ETF fund flows · AI intelligence — all in one place
-            </p>
-          </div>
-          <button
-            onClick={fetchAll}
-            disabled={refreshing}
-            className="flex items-center gap-2 px-4 py-2 rounded-xl border border-bloom-border text-sm text-bloom-text-muted hover:text-bloom-text hover:border-bloom-border-hover transition-all disabled:opacity-50"
-          >
-            <RefreshCw size={14} className={refreshing ? "animate-spin" : ""} />
-            Refresh
-          </button>
-        </motion.div>
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-6">
+          {JOURNEY.map((j) => (
+            <Link
+              key={j.href}
+              href={j.href}
+              className="glass-card p-4 hover:border-bloom-border-hover transition-colors group"
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-6 h-6 rounded-full bg-bloom-orange text-bloom-bg text-[11px] font-bold flex items-center justify-center">
+                  {j.step}
+                </span>
+                <j.icon size={14} className="text-bloom-orange" />
+              </div>
+              <p className="text-sm font-bold text-bloom-text group-hover:text-bloom-orange transition-colors">
+                {j.title}
+              </p>
+              <p className="text-[11px] text-bloom-text-muted mt-0.5">{j.desc}</p>
+            </Link>
+          ))}
+        </div>
 
-        {/* Agent status */}
-        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.08, ease }}>
+        <div className="mb-4">
           <AgentStatusBar />
-        </motion.div>
+        </div>
+        <MarketTicker />
 
-        {/* Market ticker */}
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45, delay: 0.14, ease }}>
-          <MarketTicker />
-        </motion.div>
-
-        {/* KPI strip */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.45, delay: 0.2, ease }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6"
-        >
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           {[
             {
               label: "BTC Price",
@@ -166,26 +169,21 @@ export default function DashboardPage() {
               icon: Activity,
             },
             {
-              label: "ETF Net Flow (Today)",
+              label: "ETF Net Flow",
               value: fmt(totalEtfFlow),
               sub: totalEtfFlow >= 0 ? "Net Inflow" : "Net Outflow",
               positive: totalEtfFlow >= 0,
               icon: BarChart3,
             },
             {
-              label: "AI Newsletters",
-              value: "Live",
-              sub: "SoSoValue powered",
+              label: "Next step",
+              value: "Strategies",
+              sub: "After pipeline runs",
               positive: true,
-              icon: Brain,
+              icon: Layers,
             },
-          ].map((kpi, i) => (
-            <motion.div
-              key={kpi.label}
-              whileHover={{ scale: 1.02, borderColor: "rgba(232,97,10,0.3)" }}
-              transition={{ duration: 0.15 }}
-              className="glass-card p-5"
-            >
+          ].map((kpi) => (
+            <div key={kpi.label} className="glass-card p-5">
               <div className="flex items-start justify-between mb-2">
                 <p className="text-xs text-bloom-text-muted uppercase tracking-wider font-medium">{kpi.label}</p>
                 <div className="w-7 h-7 rounded-lg bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
@@ -198,20 +196,12 @@ export default function DashboardPage() {
                   {kpi.sub}
                 </p>
               )}
-            </motion.div>
+            </div>
           ))}
-        </motion.div>
+        </div>
 
-        {/* Main grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-
-          {/* Left: crypto prices table */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.25, ease }}
-            className="xl:col-span-2 glass-card p-5"
-          >
+          <div className="xl:col-span-2 glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
@@ -226,71 +216,43 @@ export default function DashboardPage() {
                 {pricesStatus === "unavailable" ? "Price data offline" : "No price data available"}
               </div>
             ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-xs text-bloom-text-muted border-b border-bloom-border">
-                    <th className="pb-2 text-left font-semibold">Asset</th>
-                    <th className="pb-2 text-right font-semibold">Price</th>
-                    <th className="pb-2 text-right font-semibold">24h</th>
-                    <th className="pb-2 text-right font-semibold hidden md:table-cell">Volume</th>
-                    <th className="pb-2 text-right font-semibold hidden lg:table-cell">Market Cap</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {prices.map((p, i) => (
-                    <motion.tr
-                      key={p.symbol}
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3, delay: 0.05 * i }}
-                      className="border-b border-bloom-border/50 hover:bg-white/2 transition-colors"
-                    >
-                      <td className="py-3 flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center text-xs font-bold text-bloom-orange">
-                          {p.symbol.slice(0, 1)}
-                        </div>
-                        <span className="font-semibold text-bloom-text">{p.symbol}</span>
-                      </td>
-                      <td className="py-3 text-right font-mono text-bloom-text">
-                        ${p.price.toLocaleString(undefined, { maximumFractionDigits: p.price < 1 ? 4 : 2 })}
-                      </td>
-                      <td className={`py-3 text-right font-semibold ${p.change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
-                        <span className="flex items-center justify-end gap-1">
-                          {p.change24h >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
-                          {p.change24h >= 0 ? "+" : ""}{p.change24h.toFixed(2)}%
-                        </span>
-                      </td>
-                      <td className="py-3 text-right text-bloom-text-muted hidden md:table-cell">
-                        {fmt(p.volume24h)}
-                      </td>
-                      <td className="py-3 text-right text-bloom-text-muted hidden lg:table-cell">
-                        {p.marketCap ? fmt(p.marketCap) : "—"}
-                      </td>
-                    </motion.tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-xs text-bloom-text-muted border-b border-bloom-border">
+                      <th className="pb-2 text-left font-semibold">Asset</th>
+                      <th className="pb-2 text-right font-semibold">Price</th>
+                      <th className="pb-2 text-right font-semibold">24h</th>
+                      <th className="pb-2 text-right font-semibold hidden md:table-cell">Volume</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {prices.slice(0, 8).map((p) => (
+                      <tr key={p.symbol} className="border-b border-bloom-border/50">
+                        <td className="py-3 font-semibold text-bloom-text">{p.symbol}</td>
+                        <td className="py-3 text-right font-mono text-bloom-text">
+                          ${p.price.toLocaleString(undefined, { maximumFractionDigits: p.price < 1 ? 4 : 2 })}
+                        </td>
+                        <td className={`py-3 text-right font-semibold ${p.change24h >= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                          <span className="inline-flex items-center gap-1 justify-end w-full">
+                            {p.change24h >= 0 ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
+                            {p.change24h >= 0 ? "+" : ""}{p.change24h.toFixed(2)}%
+                          </span>
+                        </td>
+                        <td className="py-3 text-right text-bloom-text-muted hidden md:table-cell">
+                          {fmt(p.volume24h)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
-          </motion.div>
+          </div>
 
-          {/* Right: ETF flows */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.3, ease }}
-          >
-            <ETFFlowsPanel />
-          </motion.div>
+          <ETFFlowsPanel />
 
-          {/* Bottom: recent newsletters + quick actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.35, ease }}
-            className="xl:col-span-2 glass-card p-5"
-          >
+          <div className="xl:col-span-2 glass-card p-5">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
                 <div className="w-7 h-7 rounded-lg bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
@@ -299,61 +261,42 @@ export default function DashboardPage() {
                 <h2 className="text-sm font-bold text-bloom-text">Latest AI Intelligence</h2>
               </div>
               <Link href="/terminal" className="text-xs text-bloom-orange hover:underline flex items-center gap-1">
-                Full Terminal <ArrowUpRight size={11} />
+                Open News <ArrowUpRight size={11} />
               </Link>
             </div>
             {newsletters.length === 0 ? (
-              <div className="space-y-3">
-                {[
-                  { title: "BTC Spot ETF Inflows Signal Institutional Accumulation", narrative: "risk-on", time: "32m ago", assets: ["BTC", "IBIT"] },
-                  { title: "DeFi TVL Crosses $120B — BLOOM-DEFI Rebalance Triggered", narrative: "rotation", time: "2h ago", assets: ["AAVE", "UNI"] },
-                  { title: "Macro Risk-Off: Fed Minutes Drive Sentiment Shift", narrative: "risk-off", time: "4h ago", assets: ["USDC", "BTC"] },
-                  { title: "SOL Ecosystem Activity Surges — MAG7 Weight Adjusted", narrative: "risk-on", time: "6h ago", assets: ["SOL", "JTO"] },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/3 transition-colors border border-transparent hover:border-bloom-border cursor-pointer">
-                    <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${item.narrative === "risk-on" ? "bg-emerald-400" : item.narrative === "risk-off" ? "bg-red-400" : "bg-amber-400"}`} />
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-bloom-text leading-tight">{item.title}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-xs text-bloom-text-muted">{item.time}</span>
-                        {item.assets.map((a) => (
-                          <span key={a} className="text-xs bg-bloom-orange-dim border border-bloom-border-hover text-bloom-orange rounded-md px-1.5 py-0.5 font-mono">{a}</span>
-                        ))}
-                      </div>
-                    </div>
-                    <ArrowUpRight size={13} className="text-bloom-text-muted shrink-0 mt-0.5" />
-                  </div>
-                ))}
+              <div className="h-36 flex flex-col items-center justify-center gap-2 text-center px-4">
+                <p className="text-xs text-bloom-text-muted">No newsletters yet — run the pipeline above.</p>
+                <Link href="/terminal" className="text-xs text-bloom-orange hover:underline">
+                  Go to News terminal
+                </Link>
               </div>
             ) : (
               <div className="space-y-3">
-                {newsletters.map((nl, i) => (
-                  <div key={nl.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/3 transition-colors border border-transparent hover:border-bloom-border cursor-pointer">
+                {newsletters.map((nl) => (
+                  <Link
+                    key={nl.id}
+                    href="/terminal"
+                    className="flex items-start gap-3 p-3 rounded-xl hover:bg-white/3 border border-transparent hover:border-bloom-border"
+                  >
                     <div className={`mt-0.5 w-2 h-2 rounded-full shrink-0 ${nl.narrative === "risk-on" ? "bg-emerald-400" : nl.narrative === "risk-off" ? "bg-red-400" : "bg-amber-400"}`} />
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium text-bloom-text leading-tight">{nl.title}</p>
                       <p className="text-xs text-bloom-text-muted mt-0.5 line-clamp-1">{nl.summary}</p>
                     </div>
-                    <ArrowUpRight size={13} className="text-bloom-text-muted shrink-0 mt-0.5" />
-                  </div>
+                  </Link>
                 ))}
               </div>
             )}
-          </motion.div>
+          </div>
 
-          {/* Quick actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4, ease }}
-            className="glass-card p-5 flex flex-col gap-3"
-          >
-            <h2 className="text-sm font-bold text-bloom-text mb-1">Quick Actions</h2>
+          <div className="glass-card p-5 flex flex-col gap-3">
+            <h2 className="text-sm font-bold text-bloom-text mb-1">Continue</h2>
             {[
-              { label: "Smart Money Terminal", desc: "Live AI newsletters", href: "/terminal", icon: Brain, color: "text-bloom-orange" },
-              { label: "On-Chain Strategies", desc: "Browse SSI indices", href: "/strategies", icon: Layers, color: "text-bloom-orange" },
-              { label: "Copy Trade", desc: "Execute via SoDEX", href: "/copy-trade", icon: Zap, color: "text-emerald-400" },
-              { label: "Sentinel Guard", desc: "Risk management", href: "/copy-trade", icon: Shield, color: "text-blue-400" },
+              { label: "Discover signals", desc: "Charts · opportunities · institutional", href: "/research", icon: LineChart },
+              { label: "Browse strategies", desc: "Review SSI baskets", href: "/strategies", icon: Layers },
+              { label: "Execute copy trade", desc: "Wallet → Sentinel → SoDEX", href: "/copy-trade", icon: Zap },
+              { label: "View performance", desc: "Live fills & mark-to-market", href: "/performance", icon: BarChart3 },
             ].map((action) => (
               <Link
                 key={action.label}
@@ -361,68 +304,69 @@ export default function DashboardPage() {
                 className="flex items-center gap-3 p-3 rounded-xl border border-bloom-border hover:border-bloom-border-hover hover:bg-white/3 transition-all group"
               >
                 <div className="w-8 h-8 rounded-xl bg-bloom-bg-card border border-bloom-border flex items-center justify-center shrink-0">
-                  <action.icon size={14} className={action.color} />
+                  <action.icon size={14} className="text-bloom-orange" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold text-bloom-text">{action.label}</p>
                   <p className="text-xs text-bloom-text-muted">{action.desc}</p>
                 </div>
-                <ArrowUpRight size={13} className="text-bloom-text-muted group-hover:text-bloom-orange transition-colors shrink-0" />
+                <ArrowUpRight size={13} className="text-bloom-text-muted group-hover:text-bloom-orange shrink-0" />
               </Link>
             ))}
-          </motion.div>
-
+          </div>
         </div>
 
-        {/* ── Market Intelligence Section ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.45, ease }}
-          className="mt-10"
-        >
-          <div className="flex items-center gap-3 mb-6">
+        <div className="mt-10">
+          <button
+            type="button"
+            onClick={() => setShowAdvanced((v) => !v)}
+            className="flex items-center gap-3 mb-4 group"
+          >
             <div className="pill-badge-orange w-fit">
               <span className="live-dot" />
-              Market Intelligence
+              Optional
             </div>
-            <h2 className="text-xl font-bold text-bloom-text">
-              Advanced <span className="orange-gradient-text">Analytics</span>
+            <h2 className="text-lg font-bold text-bloom-text">
+              Market depth{" "}
+              <span className="text-bloom-text-muted font-normal text-sm">(charts, books, alerts)</span>
             </h2>
-          </div>
+            <ChevronDown
+              size={18}
+              className={`text-bloom-text-muted transition-transform ${showAdvanced ? "rotate-180" : ""}`}
+            />
+          </button>
 
-          {/* Row 1: Price Chart + DeFi TVL */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
-            <div className="xl:col-span-2">
-              <PriceKlinesChart />
-            </div>
-            <div>
-              <DefiTVLPanel />
-            </div>
-          </div>
-
-          {/* Row 2: Opportunity discovery + ETF History + Market Heatmap */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
-            <OpportunityFeedPanel compact limit={6} className="xl:col-span-1" />
-            <ETFHistoryChart />
-            <MarketHeatmap />
-          </div>
-
-          {/* Row 3: Live Order Book (full width) */}
-          <div className="mb-5">
-            <LiveOrderBook />
-          </div>
-
-          {/* Row 4: Perps Positions + VC Funding + Alerts */}
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-            <PerpsPositionsPanel />
-            <VCFundingPanel />
-            <AlertsPanel />
-          </div>
-        </motion.div>
-
+          {showAdvanced && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.35, ease }}
+            >
+              <p className="text-xs text-bloom-text-muted mb-4">
+                Prefer a focused workspace?{" "}
+                <Link href="/research" className="text-bloom-orange hover:underline">
+                  Open Discover
+                </Link>
+              </p>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
+                <div className="xl:col-span-2"><PriceKlinesChart /></div>
+                <div><DefiTVLPanel /></div>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-5 mb-5">
+                <OpportunityFeedPanel compact limit={6} className="xl:col-span-1" />
+                <ETFHistoryChart />
+                <MarketHeatmap />
+              </div>
+              <div className="mb-5"><LiveOrderBook /></div>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                <PerpsPositionsPanel />
+                <VCFundingPanel />
+                <AlertsPanel />
+              </div>
+            </motion.div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-

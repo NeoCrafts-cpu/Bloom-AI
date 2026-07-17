@@ -65,8 +65,11 @@ export default function LandingNavbar() {
           })}
         </div>
 
-        {/* Wallet button — right, outside the pill */}
-        <div className="hidden md:block">
+        {/* Open App + wallet — right */}
+        <div className="hidden md:flex items-center gap-3">
+          <Link href="/dashboard" className="orange-btn text-sm px-4 py-2">
+            Open App
+          </Link>
           <WalletButton />
         </div>
 
@@ -98,6 +101,13 @@ export default function LandingNavbar() {
               {link.label}
             </Link>
           ))}
+          <Link
+            href="/dashboard"
+            onClick={() => setMobileOpen(false)}
+            className="orange-btn text-center mt-2 py-3"
+          >
+            Open App
+          </Link>
           <div className="mt-4">
             <WalletButton />
           </div>
