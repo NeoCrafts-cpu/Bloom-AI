@@ -119,6 +119,7 @@ export type PositionSide = 1 | 2; // 1=long, 2=short
 export type Modifier = 0 | 1 | 2; // 0=none, 1=post-only, 2=reduce-only
 
 export interface SpotOrderItem {
+  symbolID: number;
   clOrdID: string;
   side: OrderSide;
   type: OrderType;

@@ -13,15 +13,16 @@ describe("SoDEX EIP-712 signing dry-run", () => {
     // Override by temporarily patching through env before dynamic import of a fresh signer is hard;
     // instead verify shape using the same algorithm inline + via buildTypedSignature when key is set.
     const order = serializeSpotOrder({
+      symbolID: 1,
       clOrdID: "dry-run-1",
       side: 1,
       type: 2,
       timeInForce: 3,
-      quantity: "0.001",
+      funds: "15.000000",
     });
     const payload = {
       type: "newOrder",
-      params: { accountID: 1, symbolID: 1, orders: [order] },
+      params: { accountID: 1, orders: [order] },
     };
     const nonce = Date.now();
 

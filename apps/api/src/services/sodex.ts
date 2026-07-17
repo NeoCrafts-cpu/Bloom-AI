@@ -1,7 +1,7 @@
 import { config } from "../config.js";
 import { cache, TTL } from "../lib/cache.js";
 import { getNonce } from "../signing/nonceManager.js";
-import { buildTypedSignature } from "../signing/eip712.js";
+import { buildTypedSignature, serializeSpotOrder, serializePerpsOrder } from "../signing/eip712.js";
 import type { SpotOrderItem, PerpsOrderItem } from "@bloom-ai/types";
 import { parseSodexKlines, parseSodexTickerChangePct, parseSodexTickerPrice, parseSodexTickerVolume, normalizeSodexSymbols, normalizeSodexAccountState } from "../lib/sodexParse.js";
 import { ethers } from "ethers";
@@ -421,7 +421,6 @@ export async function placeBatchSpotOrders(
   orders: SpotOrderItem[],
 ): Promise<{ clOrdID: string; status: string; message?: string }[]> {
   if (!hasLiveSodexCredentials()) {
-    // Simulation mode — no private key configured
     console.warn("[Broker] SODEX_API_PRIVATE_KEY not set — simulating order fills");
     return orders.map((o) => ({
       clOrdID: o.clOrdID,
@@ -430,11 +429,25 @@ export async function placeBatchSpotOrders(
     }));
   }
 
+  // Spot BatchNewOrderRequest: { accountID, orders[] } — symbolID lives on each order item
+  const serialized = orders.map((o) =>
+    serializeSpotOrder({
+      symbolID: o.symbolID || symbolID,
+      clOrdID: o.clOrdID,
+      side: o.side,
+      type: o.type,
+      timeInForce: o.timeInForce,
+      price: o.price,
+      quantity: o.quantity,
+      funds: o.funds,
+    }),
+  );
+
   return signedPost<{ clOrdID: string; status: string; message?: string }[]>(
     `${SPOT}/trade/orders/batch`,
     "spot",
     "newOrder",
-    { accountID, symbolID, orders },
+    { accountID, orders: serialized },
   );
 }
 
@@ -455,7 +468,11 @@ export async function placeBatchPerpsOrders(
     `${PERPS}/trade/orders/batch`,
     "futures",
     "newOrder",
-    { accountID, symbolID, orders },
+    {
+      accountID,
+      symbolID,
+      orders: orders.map((o) => serializePerpsOrder(o)),
+    },
   );
 }
 
@@ -468,12 +485,20 @@ export async function cancelOrder(
   if (!hasLiveSodexCredentials()) {
     return { clOrdID, status: "CANCELLED", message: "Simulated" };
   }
-  const base = isPerps ? PERPS : SPOT;
+  if (isPerps) {
+    return signedPost(
+      `${PERPS}/trade/orders/batch`,
+      "futures",
+      "cancelOrder",
+      { accountID, cancels: [{ symbolID, clOrdID }] },
+    );
+  }
+  // Spot cancel: { accountID, cancels: [{ symbolID, clOrdID }] }
   return signedPost(
-    `${base}/trade/orders/batch`,
-    isPerps ? "futures" : "spot",
+    `${SPOT}/trade/orders/batch`,
+    "spot",
     "cancelOrder",
-    { accountID, symbolID, orders: [{ clOrdID }] },
+    { accountID, cancels: [{ symbolID, clOrdID }] },
   );
 }
 

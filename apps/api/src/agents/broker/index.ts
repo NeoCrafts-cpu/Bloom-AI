@@ -7,9 +7,11 @@ import {
   getAccountState,
   getPerpsAccountState,
   getSymbolIdMap,
+  getSymbols,
   getOrderHistory,
   updatePerpsLeverage,
 } from "../../services/sodex.js";
+import { formatDecimalString } from "../../signing/eip712.js";
 import { getMarketSnapshots } from "../../services/sosovalue.js";
 import { strategyStore } from "../strategist/index.js";
 import { wsManager } from "../../ws/manager.js";
@@ -73,8 +75,9 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
   }
 
   // ── Resolve real symbolIDs from SoDEX market symbols ─────────────────────
-  const symbolIdMap = await getSymbolIdMap();
+  const [symbolIdMap, symbols] = await Promise.all([getSymbolIdMap(), getSymbols()]);
   console.log(`[Broker] Resolved symbolIDs:`, symbolIdMap);
+  const symbolMeta = Object.fromEntries(symbols.map((s) => [s.symbolID, s]));
 
   // ── Get live prices from SoDEX ────────────────────────────────────────────
   const marketResult = await getMarketSnapshots().catch(() => null);
@@ -121,9 +124,23 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
       continue;
     }
 
-    const clOrdID = `bloom-${intentId.slice(0, 6)}-${asset.symbol}-${Date.now()}`;
-    const fundsDecimal = assetAllocation.toFixed(6);
-    const quantityDecimal = (price > 0 ? assetAllocation / price : 0).toFixed(6);
+    const clOrdID = `bloom-${intentId.slice(0, 6)}-${asset.symbol}-${Date.now()}`.slice(0, 36);
+    const meta = symbolMeta[symbolID];
+    const fundsPrecision = 6; // vUSDC quoteCoinPrecision
+    const qtyPrecision = Number(meta?.quantityPrecision ?? 5);
+    const stepSize = parseFloat(meta?.stepSize ?? "0.00001") || 0.00001;
+    const minNotional = parseFloat(meta?.minNotional ?? "5") || 5;
+
+    if (assetAllocation + 1e-12 < minNotional) {
+      skipped.push(`${asset.symbol}:below-minNotional(${minNotional})`);
+      console.warn(`[Broker] ${asset.symbol} allocation $${assetAllocation} < minNotional $${minNotional}`);
+      continue;
+    }
+
+    const fundsDecimal = formatDecimalString(assetAllocation, fundsPrecision);
+    const rawQty = price > 0 ? assetAllocation / price : 0;
+    const steppedQty = Math.floor(rawQty / stepSize + 1e-12) * stepSize;
+    const quantityDecimal = formatDecimalString(steppedQty, qtyPrecision);
 
     wsManager.broadcast({
       type: "ORDER_SUBMITTED",
@@ -203,10 +220,11 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
       } else {
         rawFills = await placeBatchSpotOrders(accountID, symbolID, [
           {
+            symbolID,
             clOrdID,
             side: 1 as const,
             type: 2 as const,
-            timeInForce: 3 as const, // IOC — required for market orders (2=FOK unsupported)
+            timeInForce: 3 as const, // IOC — required for market orders
             funds: fundsDecimal,
           },
         ]);

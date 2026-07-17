@@ -103,10 +103,11 @@ export function serializePerpsOrder(order: {
 }
 
 /**
- * Serialize spot order item (simpler — no strict field ordering issues beyond
- * required vs optional)
+ * Serialize spot BatchNewOrderItem — field order must match Go SDK:
+ * symbolID, clOrdID, side, type, timeInForce, price?, quantity?, funds?
  */
 export function serializeSpotOrder(order: {
+  symbolID: number;
   clOrdID: string;
   side: number;
   type: number;
@@ -116,6 +117,7 @@ export function serializeSpotOrder(order: {
   funds?: string;
 }): Record<string, unknown> {
   const result: Record<string, unknown> = {
+    symbolID: order.symbolID,
     clOrdID: order.clOrdID,
     side: order.side,
     type: order.type,
@@ -127,4 +129,13 @@ export function serializeSpotOrder(order: {
   if (order.funds !== undefined) result["funds"] = order.funds;
 
   return result;
+}
+
+/** Format a decimal string to max precision without exceeding tick (floor). */
+export function formatDecimalString(value: number, precision: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0";
+  const p = Math.max(0, Math.min(18, Math.floor(precision)));
+  const factor = 10 ** p;
+  const floored = Math.floor(value * factor + 1e-12) / factor;
+  return floored.toFixed(p);
 }
