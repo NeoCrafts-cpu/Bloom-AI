@@ -9,7 +9,7 @@ import type { CopyTradeIntent, CopyTradeResult, SentinelReport } from "@bloom-ai
 import SentinelAlert from "./SentinelAlert";
 import OrderFeedPanel from "./OrderFeedPanel";
 import { valueChainTestnet } from "@/lib/wagmi";
-import { VALUECHAIN_TESTNET, VALUECHAIN_WALLET_PARAMS } from "@/lib/valuechain";
+import { VALUECHAIN_TESTNET, VALUECHAIN_WALLET_PARAMS, SODEX_TESTNET_TRADE_URL, isOnChainTxHash } from "@/lib/valuechain";
 
 type Step = "connect" | "configure" | "signing" | "sentinel" | "executing" | "complete" | "blocked";
 
@@ -240,7 +240,8 @@ export default function CopyTradeDashboard() {
         throw new Error("Invalid execution response");
       }
       setTradeResult(result);
-      setTxHash(result.orders[0]?.orderId ? `0x${result.orders[0].orderId.slice(0, 64)}` : "");
+      const firstOrderId = result.orders[0]?.orderId;
+      setTxHash(isOnChainTxHash(firstOrderId) ? firstOrderId! : "");
       setStep("complete");
     } catch (err) {
       setExecError((err as Error).message);
@@ -586,7 +587,7 @@ export default function CopyTradeDashboard() {
                   <span className="text-emerald-400">FILLED</span>
                 </div>
               ))}
-              {txHash && (
+              {txHash && isOnChainTxHash(txHash) ? (
                 <a
                   href={`${valueChainTestnet.blockExplorers.default.url}/tx/${txHash}`}
                   target="_blank" rel="noopener noreferrer"
@@ -594,7 +595,15 @@ export default function CopyTradeDashboard() {
                   <ExternalLink size={12} />
                   View on ValueChain Explorer
                 </a>
-              )}
+              ) : tradeResult.orders.length > 0 ? (
+                <a
+                  href={SODEX_TESTNET_TRADE_URL}
+                  target="_blank" rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 text-xs text-bloom-orange hover:underline mt-2">
+                  <ExternalLink size={12} />
+                  Verify on SoDEX Testnet (Trade History)
+                </a>
+              ) : null}
               <button onClick={reset} className="orange-btn-outline text-xs px-4 py-1.5 mt-2">
                 New Trade
               </button>

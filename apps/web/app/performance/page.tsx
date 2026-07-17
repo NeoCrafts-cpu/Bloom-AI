@@ -6,7 +6,7 @@ import {
   TrendingUp, Activity, BarChart3, ExternalLink, RefreshCw, Trophy, Zap, Shield,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import { VALUECHAIN_TESTNET } from "@/lib/valuechain";
+import { VALUECHAIN_TESTNET, SODEX_TESTNET_TRADE_URL, isOnChainTxHash } from "@/lib/valuechain";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -260,15 +260,28 @@ export default function PerformancePage() {
                         </span>
                       </td>
                       <td className="py-3 text-right">
-                        <a
-                          href={`${VALUECHAIN_TESTNET.blockExplorerUrls[0]}/tx/${t.id}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 text-bloom-orange hover:underline"
-                        >
-                          <ExternalLink size={10} />
-                          View
-                        </a>
+                        {isOnChainTxHash(t.id) ? (
+                          <a
+                            href={`${VALUECHAIN_TESTNET.blockExplorerUrls[0]}/tx/${t.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-bloom-orange hover:underline"
+                          >
+                            <ExternalLink size={10} />
+                            View
+                          </a>
+                        ) : (
+                          <a
+                            href={SODEX_TESTNET_TRADE_URL}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-bloom-orange hover:underline"
+                            title="SoDEX fills are exchange orders — open SoDEX Trade History"
+                          >
+                            <ExternalLink size={10} />
+                            SoDEX
+                          </a>
+                        )}
                       </td>
                     </tr>
                   ))}

@@ -3,7 +3,7 @@ import { cache, TTL } from "../lib/cache.js";
 import { getNonce } from "../signing/nonceManager.js";
 import { buildTypedSignature } from "../signing/eip712.js";
 import type { SpotOrderItem, PerpsOrderItem } from "@bloom-ai/types";
-import { parseSodexKlines, parseSodexTickerChangePct, parseSodexTickerPrice, parseSodexTickerVolume } from "../lib/sodexParse.js";
+import { parseSodexKlines, parseSodexTickerChangePct, parseSodexTickerPrice, parseSodexTickerVolume, normalizeSodexSymbols, normalizeSodexAccountState } from "../lib/sodexParse.js";
 import { ethers } from "ethers";
 
 const SPOT = config.SODEX_SPOT_URL;
@@ -281,12 +281,13 @@ export async function getOrderBook(
 }
 
 async function fetchSymbols(): Promise<SodexSymbol[]> {
-  return publicGet<SodexSymbol[]>(`${SPOT}/markets/symbols`);
+  const raw = await publicGet<unknown>(`${SPOT}/markets/symbols`);
+  return normalizeSodexSymbols(raw) as SodexSymbol[];
 }
 
 export async function getSymbols(): Promise<SodexSymbol[]> {
   try {
-    const result = await cache.get("sodex-symbols", TTL.SODEX_SYMBOLS, fetchSymbols);
+    const result = await cache.get("sodex-symbols-v2", TTL.SODEX_SYMBOLS, fetchSymbols);
     return result.data;
   } catch {
     return [];
@@ -298,9 +299,12 @@ export async function getSymbolIdMap(): Promise<Record<string, number>> {
   const symbols = await getSymbols();
   const map: Record<string, number> = {};
   for (const s of symbols) {
-    if (s.quoteAsset === "vUSDC" || s.quoteAsset === "USDC") {
-      map[s.baseAsset.replace(/^v/, "")] = s.symbolID;
-    }
+    const quote = s.quoteAsset;
+    if (quote !== "vUSDC" && quote !== "USDC") continue;
+    const base = s.baseAsset.replace(/^v/, "").toUpperCase();
+    // Prefer real vBTC over TESTBTC when both exist
+    if (map[base] && s.baseAsset.toUpperCase().startsWith("TEST")) continue;
+    map[base] = s.symbolID;
   }
   return map;
 }
@@ -361,19 +365,13 @@ export interface AccountState {
 export async function getAccountState(userAddress: string): Promise<AccountState | null> {
   try {
     const result = await cache.get(
-      `sodex-account-${userAddress}`,
+      `sodex-account-${userAddress.toLowerCase()}`,
       TTL.ACCOUNT_STATE,
       async () => {
-        const data = await publicGet<{
-          accountID: number;
-          balances: AccountBalance[];
-          openOrders: unknown[];
-        }>(`${SPOT}/accounts/${userAddress}/state`);
-        return {
-          accountID: data.accountID,
-          balances: data.balances ?? [],
-          openOrdersCount: (data.openOrders ?? []).length,
-        } as AccountState;
+        const data = await publicGet<unknown>(`${SPOT}/accounts/${userAddress}/state`);
+        const normalized = normalizeSodexAccountState(data);
+        if (!normalized) throw new Error("SoDEX account state missing aid/accountID");
+        return normalized as AccountState;
       },
     );
     return result.data;
@@ -557,9 +555,18 @@ export interface PerpsSymbolInfo {
 
 export async function getPerpsSymbols(): Promise<PerpsSymbolInfo[]> {
   try {
-    const result = await cache.get("perps-symbols", TTL.SODEX_SYMBOLS, () =>
-      publicGet<PerpsSymbolInfo[]>(`${PERPS}/markets/symbols`),
-    );
+    const result = await cache.get("perps-symbols-v2", TTL.SODEX_SYMBOLS, async () => {
+      const raw = await publicGet<unknown>(`${PERPS}/markets/symbols`);
+      return normalizeSodexSymbols(raw).map((s) => ({
+        symbol: s.symbol,
+        symbolID: s.symbolID,
+        baseAsset: s.baseAsset,
+        quoteAsset: s.quoteAsset,
+        maxLeverage: 20,
+        pricePrecision: s.pricePrecision,
+        quantityPrecision: s.quantityPrecision,
+      }));
+    });
     return result.data ?? [];
   } catch {
     return [];
@@ -599,20 +606,22 @@ export interface PerpsAccountState {
 export async function getPerpsAccountState(userAddress: string): Promise<PerpsAccountState | null> {
   try {
     const result = await cache.get(
-      `sodex-perps-account-${userAddress}`,
+      `sodex-perps-account-${userAddress.toLowerCase()}`,
       TTL.PERPS_ACCOUNT,
       async () => {
-        const data = await publicGet<{
-          accountID: number;
-          balances: PerpsBalance[];
-          positions: PerpsPosition[];
-          openOrders: unknown[];
-        }>(`${PERPS}/accounts/${userAddress}/state`);
+        const data = await publicGet<unknown>(`${PERPS}/accounts/${userAddress}/state`);
+        const normalized = normalizeSodexAccountState(data);
+        if (!normalized) throw new Error("SoDEX perps account state missing aid/accountID");
+        const raw = data as Record<string, unknown>;
         return {
-          accountID: data.accountID,
-          balances: data.balances ?? [],
-          positions: data.positions ?? [],
-          openOrdersCount: (data.openOrders ?? []).length,
+          accountID: normalized.accountID,
+          balances: normalized.balances.map((b) => ({
+            ...b,
+            unrealizedPnl: "0",
+            marginBalance: b.total,
+          })),
+          positions: Array.isArray(raw.P) ? (raw.P as PerpsPosition[]) : Array.isArray(raw.positions) ? (raw.positions as PerpsPosition[]) : [],
+          openOrdersCount: normalized.openOrdersCount,
         } as PerpsAccountState;
       },
     );

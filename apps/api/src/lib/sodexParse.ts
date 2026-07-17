@@ -9,6 +9,20 @@ export interface SodexKlineBar {
   volume: number;
 }
 
+export interface NormalizedSodexSymbol {
+  symbol: string;
+  symbolID: number;
+  baseAsset: string;
+  quoteAsset: string;
+  minNotional: string;
+  pricePrecision: number;
+  quantityPrecision: number;
+  tickSize: string;
+  stepSize: string;
+  minQuantity: string;
+  lastTradePrice: string;
+}
+
 type RawTicker = {
   symbol: string;
   lastPrice?: string;
@@ -41,6 +55,88 @@ export function parseSodexTickerVolume(ticker: RawTicker): number {
   const raw = ticker.quoteVolume ?? ticker.q ?? ticker.volume ?? "0";
   const v = parseFloat(String(raw));
   return Number.isFinite(v) ? v : 0;
+}
+
+/**
+ * Normalize spot/perps symbol rows.
+ * Current SoDEX: { id, name, baseCoin, quoteCoin, ... }
+ * Legacy: { symbolID, symbol, baseAsset, quoteAsset, ... }
+ */
+export function normalizeSodexSymbols(data: unknown): NormalizedSodexSymbol[] {
+  if (!Array.isArray(data)) return [];
+  const out: NormalizedSodexSymbol[] = [];
+  for (const row of data) {
+    if (!row || typeof row !== "object") continue;
+    const r = row as Record<string, unknown>;
+    const symbolID = Number(r.symbolID ?? r.id ?? 0);
+    const symbol = String(r.symbol ?? r.name ?? "");
+    const baseAsset = String(r.baseAsset ?? r.baseCoin ?? "");
+    const quoteAsset = String(r.quoteAsset ?? r.quoteCoin ?? "");
+    if (!(symbolID > 0) || !symbol) continue;
+    out.push({
+      symbol,
+      symbolID,
+      baseAsset,
+      quoteAsset,
+      minNotional: String(r.minNotional ?? "0"),
+      pricePrecision: Number(r.pricePrecision ?? 8),
+      quantityPrecision: Number(r.quantityPrecision ?? 8),
+      tickSize: String(r.tickSize ?? "0"),
+      stepSize: String(r.stepSize ?? "0"),
+      minQuantity: String(r.minQuantity ?? "0"),
+      lastTradePrice: String(r.lastTradePrice ?? r.lastPx ?? "0"),
+    });
+  }
+  return out;
+}
+
+export interface NormalizedAccountState {
+  accountID: number;
+  balances: { asset: string; available: string; locked: string; total: string }[];
+  openOrdersCount: number;
+}
+
+/**
+ * Normalize account state.
+ * Current SoDEX: { aid, B:[{a,t,l}], O }
+ * Legacy: { accountID, balances, openOrders }
+ */
+export function normalizeSodexAccountState(data: unknown): NormalizedAccountState | null {
+  if (!data || typeof data !== "object") return null;
+  const r = data as Record<string, unknown>;
+  const accountID = Number(r.accountID ?? r.aid ?? r.uid ?? 0);
+  if (!(accountID > 0)) return null;
+
+  const balances: NormalizedAccountState["balances"] = [];
+  if (Array.isArray(r.balances)) {
+    for (const b of r.balances) {
+      if (!b || typeof b !== "object") continue;
+      const row = b as Record<string, unknown>;
+      balances.push({
+        asset: String(row.asset ?? row.a ?? ""),
+        available: String(row.available ?? row.t ?? "0"),
+        locked: String(row.locked ?? row.l ?? "0"),
+        total: String(row.total ?? row.t ?? "0"),
+      });
+    }
+  } else if (Array.isArray(r.B)) {
+    for (const b of r.B) {
+      if (!b || typeof b !== "object") continue;
+      const row = b as Record<string, unknown>;
+      const total = String(row.t ?? row.wb ?? "0");
+      const locked = String(row.l ?? "0");
+      balances.push({
+        asset: String(row.a ?? row.asset ?? ""),
+        available: total,
+        locked,
+        total,
+      });
+    }
+  }
+
+  const openOrders = r.openOrders ?? r.O;
+  const openOrdersCount = Array.isArray(openOrders) ? openOrders.length : 0;
+  return { accountID, balances, openOrdersCount };
 }
 
 export function parseSodexKlines(data: unknown): SodexKlineBar[] {

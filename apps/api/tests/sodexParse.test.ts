@@ -5,6 +5,8 @@ import {
   parseSodexTickerChangePct,
   parseSodexTickerPrice,
   parseSodexTickerVolume,
+  normalizeSodexSymbols,
+  normalizeSodexAccountState,
 } from "../src/lib/sodexParse.js";
 
 describe("sodexParse", () => {
@@ -40,5 +42,29 @@ describe("sodexParse", () => {
 
   it("returns empty array for unparseable klines", () => {
     assert.deepEqual(parseSodexKlines([{ t: 0, o: 0, h: 0, l: 0, c: 0, v: 0 }]), []);
+  });
+
+  it("normalizes current SoDEX symbol schema (id/name/baseCoin)", () => {
+    const symbols = normalizeSodexSymbols([
+      { id: 1, name: "vBTC_vUSDC", baseCoin: "vBTC", quoteCoin: "vUSDC", minNotional: "5" },
+      { id: 2, name: "vETH_vUSDC", baseCoin: "vETH", quoteCoin: "vUSDC" },
+    ]);
+    assert.equal(symbols.length, 2);
+    assert.equal(symbols[0].symbolID, 1);
+    assert.equal(symbols[0].baseAsset, "vBTC");
+    assert.equal(symbols[0].symbol, "vBTC_vUSDC");
+  });
+
+  it("normalizes account state aid/B format", () => {
+    const state = normalizeSodexAccountState({
+      user: "0xabc",
+      aid: 56647,
+      B: [{ i: 0, a: "vUSDC", t: "500.5", l: "0" }],
+      O: null,
+    });
+    assert.ok(state);
+    assert.equal(state!.accountID, 56647);
+    assert.equal(state!.balances[0].asset, "vUSDC");
+    assert.equal(state!.balances[0].total, "500.5");
   });
 });

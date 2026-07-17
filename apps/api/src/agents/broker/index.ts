@@ -58,14 +58,18 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     const accountState = usePerps
       ? await getPerpsAccountState(intent.userAddress)
       : await getAccountState(intent.userAddress);
-    if (accountState && "accountID" in accountState && accountState.accountID) {
-      accountID = accountState.accountID as number;
+    if (accountState && accountState.accountID > 0) {
+      accountID = accountState.accountID;
       console.log(`[Broker] Resolved accountID=${accountID} for ${intent.userAddress}`);
-    } else if (accountState && "aid" in (accountState as object)) {
-      accountID = Number((accountState as { aid?: number }).aid ?? 0);
     } else {
-      console.warn(`[Broker] Could not resolve accountID for ${intent.userAddress} — using 0`);
+      console.warn(`[Broker] Could not resolve accountID for ${intent.userAddress}`);
     }
+  }
+
+  if (!(accountID > 0)) {
+    throw new Error(
+      `SoDEX accountID not found for ${intent.userAddress}. Open SoDEX testnet, deposit/claim funds, then retry.`,
+    );
   }
 
   // ── Resolve real symbolIDs from SoDEX market symbols ─────────────────────
@@ -98,6 +102,7 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
 
   // ── Place batch orders per asset ──────────────────────────────────────────
   const fills: OrderFill[] = [];
+  const skipped: string[] = [];
   const useTwap = intent.executionStyle === "twap";
   const twapDurationSec = intent.twapDurationSec ?? 300;
 
@@ -106,12 +111,13 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
   }
 
   for (const asset of index.assets) {
-    const symbolID = symbolIdMap[asset.symbol];
+    const symbolID = symbolIdMap[asset.symbol.toUpperCase()] ?? symbolIdMap[asset.symbol];
     const price = asset.currentPrice || priceMap[asset.symbol] || 0;
     const assetAllocation = intent.allocationUSD * asset.weight;
 
     if (!symbolID) {
       console.warn(`[Broker] No symbolID for ${asset.symbol} — skipping`);
+      skipped.push(`${asset.symbol}:no-symbolID`);
       continue;
     }
 
@@ -137,6 +143,7 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
         const qty = parseFloat(quantityDecimal);
         if (!(qty > 0)) {
           console.warn(`[Broker] TWAP skip ${asset.symbol} — zero quantity (need live price)`);
+          skipped.push(`${asset.symbol}:zero-qty`);
           continue;
         }
         if (usePerps) {
@@ -229,6 +236,14 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
       // Propagate error — do NOT silently produce fake fills
       throw new Error(`Order execution failed for ${asset.symbol}: ${(err as Error).message}`);
     }
+  }
+
+  if (fills.length === 0) {
+    const detail = skipped.length ? ` skipped=[${skipped.join(", ")}]` : "";
+    const known = Object.keys(symbolIdMap).slice(0, 12).join(",");
+    throw new Error(
+      `No SoDEX orders placed for strategy ${intent.strategyId}.${detail} Known bases: ${known || "none"}`,
+    );
   }
 
   // ── Wait briefly for fills to settle then fetch order history ─────────────
