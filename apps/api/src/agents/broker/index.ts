@@ -206,7 +206,7 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
             clOrdID,
             side: 1 as const,
             type: 2 as const,
-            timeInForce: 2 as const,
+            timeInForce: 3 as const, // IOC — required for market orders (2=FOK unsupported)
             funds: fundsDecimal,
           },
         ]);

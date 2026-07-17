@@ -113,7 +113,8 @@ export interface SSIAssetWeight {
 
 export type OrderSide = 1 | 2; // 1=buy, 2=sell
 export type OrderType = 1 | 2; // 1=limit, 2=market
-export type TimeInForce = 1 | 2 | 3; // 1=GTC, 2=IOC, 3=GTX
+/** 1=GTC, 2=FOK (unsupported), 3=IOC, 4=GTX — market orders must use IOC(3) */
+export type TimeInForce = 1 | 2 | 3 | 4;
 export type PositionSide = 1 | 2; // 1=long, 2=short
 export type Modifier = 0 | 1 | 2; // 0=none, 1=post-only, 2=reduce-only
 
