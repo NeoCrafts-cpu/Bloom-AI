@@ -56,7 +56,23 @@ export async function getHealthReport() {
   const newsletters = newsletterStore.getAll();
   const strategies = strategyStore.getAll();
   const perf = tradeStore.getPerformance();
-  const executionMode = config.SODEX_API_PRIVATE_KEY && config.SODEX_API_KEY_NAME ? "live" : "simulated";
+  let sodexAuth: { apiKeyName: string | null; source: string; signingAddress: string } | null = null;
+  let executionMode: "live" | "simulated" = "simulated";
+  if (config.SODEX_API_PRIVATE_KEY) {
+    try {
+      const { resolveSodexSigningAuth } = await import("../services/sodex.js");
+      const auth = await resolveSodexSigningAuth();
+      sodexAuth = {
+        apiKeyName: auth.apiKeyName,
+        source: auth.source,
+        signingAddress: auth.signingAddress,
+      };
+      executionMode = "live";
+    } catch (err) {
+      sodexAuth = { apiKeyName: null, source: "error", signingAddress: "" };
+      console.warn("[Health] SoDEX auth resolve failed:", (err as Error).message);
+    }
+  }
 
   const [sosovalueProbe, sodexProbe, pricesResult] = await Promise.all([
     probeSosovalue(),
@@ -130,8 +146,9 @@ export async function getHealthReport() {
       openrouter: !!config.OPENROUTER_API_KEY,
       sosovalue: !!config.SOSOVALUE_API_KEY,
       sodexPrivateKey: !!config.SODEX_API_PRIVATE_KEY,
-      sodexKeyName: !!config.SODEX_API_KEY_NAME,
+      sodexKeyName: !!config.SODEX_API_KEY_NAME || !!sodexAuth?.apiKeyName || sodexAuth?.source === "master",
       sodexKeyAddress: !!config.SODEX_API_KEY_ADDRESS,
+      sodexAuth,
     },
   };
 }

@@ -9,11 +9,118 @@ import { ethers } from "ethers";
 const SPOT = config.SODEX_SPOT_URL;
 const PERPS = config.SODEX_PERPS_URL;
 
+/** Gateway root e.g. https://testnet-gw.sodex.dev/api/v1 */
+function gatewayRoot(): string {
+  return SPOT.replace(/\/spot\/?$/, "") || PERPS.replace(/\/perps\/?$/, "");
+}
+
 interface SodexResponse<T> {
   code: number;
   timestamp: number;
   error?: string;
   data?: T;
+}
+
+export interface SodexApiKeyRow {
+  name: string;
+  type?: string;
+  publicKey: string;
+  expiresAt?: number;
+}
+
+export interface SodexSigningAuth {
+  signingAddress: string;
+  /** Null/empty = master wallet mode — omit X-API-Key header (SoDEX "default" key) */
+  apiKeyName: string | null;
+  source: "env" | "auto" | "master";
+}
+
+/** True when private key is set — live signing is possible (key name auto-resolved if missing). */
+export function hasLiveSodexCredentials(): boolean {
+  return !!config.SODEX_API_PRIVATE_KEY;
+}
+
+export function getSigningAddress(): string {
+  if (!config.SODEX_API_PRIVATE_KEY) return "";
+  try {
+    return new ethers.Wallet(config.SODEX_API_PRIVATE_KEY).address;
+  } catch {
+    return "";
+  }
+}
+
+export async function listSodexApiKeys(userAddress: string): Promise<{
+  spot: SodexApiKeyRow[];
+  perps: SodexApiKeyRow[];
+}> {
+  const url = `${gatewayRoot()}/user/${userAddress}/api-keys`;
+  const data = await publicGet<{ spot?: SodexApiKeyRow[]; perps?: SodexApiKeyRow[] }>(url);
+  return {
+    spot: data?.spot ?? [],
+    perps: data?.perps ?? [],
+  };
+}
+
+/**
+ * Resolve which X-API-Key name to send (or omit for master/"default").
+ * Matches the private-key address against SoDEX-registered API keys.
+ */
+export async function resolveSodexSigningAuth(): Promise<SodexSigningAuth> {
+  if (!config.SODEX_API_PRIVATE_KEY) {
+    throw new Error("SODEX_API_PRIVATE_KEY is required for live SoDEX execution");
+  }
+
+  const signingAddress = getSigningAddress();
+  if (!signingAddress) {
+    throw new Error("SODEX_API_PRIVATE_KEY is invalid");
+  }
+
+  const envName = config.SODEX_API_KEY_NAME.trim();
+  if (envName && envName.toLowerCase() !== "default") {
+    return { signingAddress, apiKeyName: envName, source: "env" };
+  }
+
+  // Query keys for configured account address and/or signing address
+  const lookupAddrs = [
+    ...new Set(
+      [config.SODEX_API_KEY_ADDRESS, signingAddress]
+        .map((a) => a?.trim().toLowerCase())
+        .filter((a): a is string => !!a && /^0x[0-9a-f]{40}$/.test(a)),
+    ),
+  ];
+
+  let matched: SodexApiKeyRow | null = null;
+  for (const addr of lookupAddrs) {
+    try {
+      const keys = await listSodexApiKeys(addr);
+      const all = [...keys.spot, ...keys.perps];
+      const hit = all.find(
+        (k) => k.publicKey?.toLowerCase() === signingAddress.toLowerCase(),
+      );
+      if (hit) {
+        matched = hit;
+        break;
+      }
+      // If listing from master, also find any non-default key whose pubkey matches
+      if (!matched) {
+        const named = all.find(
+          (k) =>
+            k.name?.toLowerCase() !== "default" &&
+            k.publicKey?.toLowerCase() === signingAddress.toLowerCase(),
+        );
+        if (named) matched = named;
+      }
+    } catch (err) {
+      console.warn(`[SoDEX] api-keys lookup failed for ${addr}:`, (err as Error).message);
+    }
+  }
+
+  if (!matched || matched.name.toLowerCase() === "default") {
+    // Master wallet signing — omit X-API-Key per SoDEX docs
+    return { signingAddress, apiKeyName: null, source: "master" };
+  }
+
+  return { signingAddress, apiKeyName: matched.name, source: "auto" };
 }
 
 async function publicGet<T>(url: string): Promise<T> {
@@ -35,30 +142,40 @@ async function signedPost<T>(
   actionType: string,
   params: Record<string, unknown>,
 ): Promise<T> {
-  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
-    throw new Error("SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME are required for live SoDEX execution");
+  if (!config.SODEX_API_PRIVATE_KEY) {
+    throw new Error("SODEX_API_PRIVATE_KEY is required for live SoDEX execution");
   }
-  const signingAddress = config.SODEX_API_KEY_ADDRESS || new ethers.Wallet(config.SODEX_API_PRIVATE_KEY).address;
+
+  const auth = await resolveSodexSigningAuth();
+  const signingAddress = auth.signingAddress;
   const nonce = await getNonce(signingAddress);
   const payload = { type: actionType, params };
   const { typedSig } = await buildTypedSignature(payload, nonce, domainName);
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-API-Sign": typedSig,
+    "X-API-Nonce": String(nonce),
+  };
+  // Named API key → send name. Master/"default" → omit header (SoDEX docs).
+  if (auth.apiKeyName) {
+    headers["X-API-Key"] = auth.apiKeyName;
+  }
+
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-API-Key": config.SODEX_API_KEY_NAME,
-      "X-API-Sign": typedSig,
-      "X-API-Nonce": String(nonce),
-    },
+    headers,
     body: JSON.stringify(params),
     signal: AbortSignal.timeout(15000),
   });
 
   const json = (await res.json()) as SodexResponse<T>;
   if (json.code !== 0 && json.code !== 200) {
-    throw new Error(`SoDEX ${actionType} error ${json.code}: ${json.error}`);
+    throw new Error(
+      `SoDEX ${actionType} error ${json.code}: ${json.error}` +
+        ` (auth=${auth.source}, key=${auth.apiKeyName ?? "omit/master"})`,
+    );
   }
   return json.data as T;
 }
@@ -305,13 +422,13 @@ export async function placeBatchSpotOrders(
   symbolID: number,
   orders: SpotOrderItem[],
 ): Promise<{ clOrdID: string; status: string; message?: string }[]> {
-  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+  if (!hasLiveSodexCredentials()) {
     // Simulation mode — no private key configured
     console.warn("[Broker] SODEX_API_PRIVATE_KEY not set — simulating order fills");
     return orders.map((o) => ({
       clOrdID: o.clOrdID,
       status: "FILLED",
-      message: "Simulated — configure SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME for live execution",
+      message: "Simulated — configure SODEX_API_PRIVATE_KEY for live execution (key name auto-resolved)",
     }));
   }
 
@@ -328,11 +445,11 @@ export async function placeBatchPerpsOrders(
   symbolID: number,
   orders: PerpsOrderItem[],
 ) {
-  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+  if (!hasLiveSodexCredentials()) {
     return orders.map((o) => ({
       clOrdID: o.clOrdID,
       status: "FILLED",
-      message: "Simulated — configure SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME for live execution",
+      message: "Simulated — configure SODEX_API_PRIVATE_KEY for live execution (key name auto-resolved)",
     }));
   }
 
@@ -350,7 +467,7 @@ export async function cancelOrder(
   clOrdID: string,
   isPerps = false,
 ) {
-  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+  if (!hasLiveSodexCredentials()) {
     return { clOrdID, status: "CANCELLED", message: "Simulated" };
   }
   const base = isPerps ? PERPS : SPOT;
@@ -374,8 +491,8 @@ export async function placeTwapOrder(
     isPerps?: boolean;
   },
 ) {
-  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
-    throw new Error("TWAP requires SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME — refusing simulated TWAP");
+  if (!hasLiveSodexCredentials()) {
+    throw new Error("TWAP requires SODEX_API_PRIVATE_KEY — refusing simulated TWAP");
   }
   if (!config.SODEX_ENABLE_TWAP) {
     throw new Error("TWAP disabled — set SODEX_ENABLE_TWAP=1");
@@ -397,7 +514,7 @@ export async function placeTwapOrder(
 }
 
 export async function updatePerpsLeverage(accountID: number, symbolID: number, leverage: number) {
-  if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
+  if (!hasLiveSodexCredentials()) {
     return { accountID, symbolID, leverage, status: "SIMULATED" };
   }
   return signedPost(`${PERPS}/trade/leverage`, "futures", "updateLeverage", {

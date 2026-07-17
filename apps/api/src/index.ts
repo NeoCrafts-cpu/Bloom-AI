@@ -97,7 +97,7 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
 
     try {
       const result = await executeCopyTrade(intent);
-      const simulated = !config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME;
+      const simulated = !config.SODEX_API_PRIVATE_KEY;
       tradeStore.recordExecution(intent, result, simulated);
       return { data: { ...result, simulated } };
     } catch (err) {

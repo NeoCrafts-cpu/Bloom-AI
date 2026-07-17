@@ -267,7 +267,7 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
       userAddress: intent.userAddress,
       allocationUSD: intent.allocationUSD,
       newsletterId: intent.newsletterId,
-      simulated: !config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME,
+      simulated: !config.SODEX_API_PRIVATE_KEY,
       userSignature: intent.userSignature,
       totalExecutedUSD: totalExecuted,
     });
