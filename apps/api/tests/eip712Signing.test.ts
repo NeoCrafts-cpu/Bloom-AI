@@ -42,11 +42,19 @@ describe("SoDEX EIP-712 signing dry-run", () => {
       ],
     };
     const rawSig = await wallet.signTypedData(domain, types, { payloadHash, nonce });
-    const typedSig = "0x01" + (rawSig.startsWith("0x") ? rawSig.slice(2) : rawSig);
+    const parsed = ethers.Signature.from(rawSig);
+    const r = parsed.r.replace(/^0x/, "").padStart(64, "0");
+    const s = parsed.s.replace(/^0x/, "").padStart(64, "0");
+    const v = (parsed.yParity & 1).toString(16).padStart(2, "0");
+    const typedSig = `0x01${r}${s}${v}`;
 
     assert.equal(typedSig.startsWith("0x01"), true);
     // 0x + 01 prefix + 65-byte signature hex (130 chars) = 134
     assert.equal(typedSig.length, 134);
+    // SoDEX expects yParity 0/1 — not ethers legacy 27/28
+    assert.match(typedSig.slice(-2), /^0[01]$/);
+    assert.notEqual(typedSig.slice(-2), "1b");
+    assert.notEqual(typedSig.slice(-2), "1c");
     assert.equal(payloadHash.startsWith("0x"), true);
     assert.equal(payloadHash.length, 66);
 
@@ -56,6 +64,7 @@ describe("SoDEX EIP-712 signing dry-run", () => {
         const result = await buildTypedSignature(payload, nonce, "spot");
         assert.equal(result.payloadHash, payloadHash);
         assert.equal(result.typedSig.startsWith("0x01"), true);
+        assert.match(result.typedSig.slice(-2), /^0[01]$/);
       } catch {
         // config may have been loaded with a different key — shape check above is sufficient
       }

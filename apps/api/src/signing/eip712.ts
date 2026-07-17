@@ -50,10 +50,14 @@ export async function buildTypedSignature(
   const wallet = new ethers.Wallet(config.SODEX_API_PRIVATE_KEY);
   const rawSig = await wallet.signTypedData(domain, types, message);
 
-  // Step 7: Prepend 0x01 byte
-  // rawSig is 0x + 130 hex chars (65 bytes). Strip 0x, prepend "01"
-  const sigHex = rawSig.startsWith("0x") ? rawSig.slice(2) : rawSig;
-  const typedSig = "0x01" + sigHex;
+  // Step 7: Prepend SignatureType 0x01 + 65-byte ECDSA (r ‖ s ‖ v).
+  // ethers returns v as 27/28; SoDEX (go-ethereum SigToPub) requires v as 0/1.
+  // Sending 27/28 yields: "Failed to recover signer: Invalid recovery ID: bad recovery id".
+  const sig = ethers.Signature.from(rawSig);
+  const r = sig.r.replace(/^0x/, "").padStart(64, "0");
+  const s = sig.s.replace(/^0x/, "").padStart(64, "0");
+  const v = (sig.yParity & 1).toString(16).padStart(2, "0");
+  const typedSig = `0x01${r}${s}${v}`;
 
   return { typedSig, payloadHash };
 }
