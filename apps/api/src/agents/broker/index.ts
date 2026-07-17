@@ -3,6 +3,7 @@ import type { CopyTradeIntent, CopyTradeResult, OrderFill, SSIIndex } from "@blo
 import {
   placeBatchSpotOrders,
   placeBatchPerpsOrders,
+  placeTwapOrder,
   getAccountState,
   getPerpsAccountState,
   getSymbolIdMap,
@@ -97,6 +98,12 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
 
   // ── Place batch orders per asset ──────────────────────────────────────────
   const fills: OrderFill[] = [];
+  const useTwap = intent.executionStyle === "twap";
+  const twapDurationSec = intent.twapDurationSec ?? 300;
+
+  if (useTwap && !config.SODEX_ENABLE_TWAP) {
+    throw new Error("TWAP disabled — set SODEX_ENABLE_TWAP=1");
+  }
 
   for (const asset of index.assets) {
     const symbolID = symbolIdMap[asset.symbol];
@@ -110,14 +117,66 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
 
     const clOrdID = `bloom-${intentId.slice(0, 6)}-${asset.symbol}-${Date.now()}`;
     const fundsDecimal = assetAllocation.toFixed(6);
+    const quantityDecimal = (price > 0 ? assetAllocation / price : 0).toFixed(6);
 
     wsManager.broadcast({
       type: "ORDER_SUBMITTED",
-      payload: { intentId, symbol: `${asset.symbol}/USDC`, weight: asset.weight, allocationUSD: assetAllocation },
+      payload: {
+        intentId,
+        symbol: `${asset.symbol}/USDC`,
+        weight: asset.weight,
+        allocationUSD: assetAllocation,
+        executionStyle: useTwap ? "twap" : "market",
+        twapDurationSec: useTwap ? twapDurationSec : undefined,
+      },
       timestamp: new Date().toISOString(),
     });
 
     try {
+      if (useTwap) {
+        const qty = parseFloat(quantityDecimal);
+        if (!(qty > 0)) {
+          console.warn(`[Broker] TWAP skip ${asset.symbol} — zero quantity (need live price)`);
+          continue;
+        }
+        if (usePerps) {
+          const lev = Math.min(intent.leverage ?? 1, config.SENTINEL_MAX_LEVERAGE);
+          await updatePerpsLeverage(accountID, symbolID, lev).catch(() => null);
+        }
+        const twapResult = (await placeTwapOrder(accountID, symbolID, {
+          clOrdID,
+          side: 1,
+          quantity: quantityDecimal,
+          durationSec: twapDurationSec,
+          isPerps: usePerps,
+        })) as { clOrdID?: string; status?: string; orderId?: string | number };
+
+        const fill: OrderFill = {
+          orderId: String(twapResult.orderId ?? `${clOrdID}-twap`),
+          clOrdID,
+          symbol: `${asset.symbol}/USDC`,
+          side: 1,
+          fillPrice: price,
+          fillQuantity: qty,
+          status: "new",
+          timestamp: new Date().toISOString(),
+        };
+        fills.push(fill);
+        wsManager.broadcast({
+          type: "ORDER_FILL",
+          payload: {
+            ...fill,
+            simulated: false,
+            venue: usePerps ? "perps" : "spot",
+            executionStyle: "twap",
+            twapDurationSec,
+            status: twapResult.status ?? "SUBMITTED",
+          },
+          timestamp: new Date().toISOString(),
+        });
+        continue;
+      }
+
       let rawFills: { clOrdID: string; status: string; message?: string }[];
       if (usePerps) {
         const lev = Math.min(intent.leverage ?? 1, config.SENTINEL_MAX_LEVERAGE);
@@ -129,7 +188,7 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
             side: 1,
             type: 2,
             timeInForce: 3,
-            quantity: (price > 0 ? assetAllocation / price : 0).toFixed(6),
+            quantity: quantityDecimal,
             reduceOnly: false,
             positionSide: 1,
           },

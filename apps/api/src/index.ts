@@ -55,7 +55,7 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
   "/api/sentinel/check",
   async (req) => {
     const { runSentinel } = await import("./agents/sentinel/index.js");
-    return { data: runSentinel(req.body) };
+    return { data: await runSentinel(req.body) };
   },
 );
 
@@ -85,7 +85,7 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
       return reply.code(401).send({ error: auth.error ?? "Copy-trade authorization failed" });
     }
 
-    const sentinel = runSentinel(intent);
+    const sentinel = await runSentinel(intent);
     if (!sentinel.passed) {
       tradeStore.recordSentinelBlock(sentinel, {
         strategyId: intent.strategyId,

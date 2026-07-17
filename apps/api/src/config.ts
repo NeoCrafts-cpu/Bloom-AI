@@ -87,4 +87,9 @@ export const config = {
     process.env.SENTINEL_MAX_CONSECUTIVE_LOSSES ?? "3",
     10,
   ),
+  /** Hard-block copy-trades when a high-importance macro event is within ±N hours */
+  SENTINEL_MACRO_GATE_HOURS: parseInt(
+    process.env.SENTINEL_MACRO_GATE_HOURS ?? "12",
+    10,
+  ),
 } as const;

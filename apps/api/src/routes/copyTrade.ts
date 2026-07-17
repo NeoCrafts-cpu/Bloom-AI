@@ -15,8 +15,30 @@ export async function copyTradeRouter(app: FastifyInstance) {
     return { data: tradeStore.getAudit(50) };
   });
 
-  // GET /performance — real session stats only (no fabricated win rates)
+  // GET /performance — real session stats + live mark-to-market (no fabricated win rates)
   app.get("/performance", async () => {
+    const { getAllMarkPrices, getMarkPriceCacheStatus } = await import("../services/markPriceCache.js");
+    const { getPerpsMarkPrices } = await import("../services/sodex.js");
+    const { getMarketSnapshots } = await import("../services/sosovalue.js");
+
+    // Prefer WS marks; backfill from REST when cache is cold
+    let marks = getAllMarkPrices();
+    if (Object.keys(marks).length === 0) {
+      const [perpsMarks, spot] = await Promise.all([
+        getPerpsMarkPrices().catch(() => []),
+        getMarketSnapshots().catch(() => null),
+      ]);
+      for (const m of perpsMarks) {
+        const px = parseFloat(m.markPrice);
+        if (Number.isFinite(px) && px > 0) {
+          marks[m.symbol.replace(/^v/, "").split(/[_/-]/)[0].toUpperCase()] = px;
+        }
+      }
+      for (const m of spot?.data ?? []) {
+        if (m.price > 0) marks[m.symbol.toUpperCase()] = m.price;
+      }
+    }
+    const mtmUpdated = tradeStore.updatePnlFromMarks(marks);
     const perf = tradeStore.getPerformance();
     return {
       data: {
@@ -29,6 +51,9 @@ export async function copyTradeRouter(app: FastifyInstance) {
         avgTradeUSD: perf.avgTradeUSD,
         simulatedTrades: perf.simulatedTrades,
         liveTrades: perf.liveTrades,
+        mtmTrades: perf.mtmTrades,
+        mtmUpdated,
+        markCache: getMarkPriceCacheStatus(),
         byStrategy: perf.byStrategy,
       },
     };
@@ -44,7 +69,7 @@ export async function copyTradeRouter(app: FastifyInstance) {
 
   // Preview sentinel check without executing
   app.post<{ Body: CopyTradeIntent }>("/preview", async (req) => {
-    const report = runSentinel(req.body);
+    const report = await runSentinel(req.body);
     if (!report.passed) {
       tradeStore.recordSentinelBlock(report, {
         strategyId: req.body.strategyId,

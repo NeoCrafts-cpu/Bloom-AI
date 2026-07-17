@@ -142,6 +142,35 @@ class TradeStore {
     return this.audit.slice(-limit).reverse();
   }
 
+  /**
+   * Mark-to-market open/executed trades using live marks keyed by base asset (BTC, ETH, …).
+   * Returns how many trade records received a fresh pnlUSD.
+   */
+  updatePnlFromMarks(marks: Record<string, number>): number {
+    const normalize = (sym: string) =>
+      sym.replace(/^v/, "").split(/[_/-]/)[0].toUpperCase();
+
+    let updated = 0;
+    for (const trade of this.trades) {
+      if (trade.sentinelStatus !== "passed" || !trade.orders?.length) continue;
+      let pnl = 0;
+      let priced = 0;
+      for (const o of trade.orders) {
+        const base = normalize(o.symbol);
+        const mark = marks[base] ?? marks[o.symbol];
+        if (!mark || !(o.fillPrice > 0) || !(o.fillQuantity > 0)) continue;
+        const sideMul = o.side === 1 ? 1 : -1;
+        pnl += sideMul * (mark - o.fillPrice) * o.fillQuantity;
+        priced++;
+      }
+      if (priced === 0) continue;
+      trade.pnlUSD = parseFloat(pnl.toFixed(2));
+      updated++;
+    }
+    if (updated > 0) this.persist();
+    return updated;
+  }
+
   getPerformance() {
     const executed = this.trades.filter((t) => t.sentinelStatus === "passed");
     const blocked = this.audit.filter((a) => a.type === "sentinel_block");
@@ -159,7 +188,7 @@ class TradeStore {
       if (t.simulated) byStrategy[t.strategyId].simulated++;
     }
 
-    // Simple PnL proxy: compare fill notional vs allocation (real PnL needs mark-to-market)
+    // PnL only from trades that have real MTM (fill vs mark) — never fabricate win rate
     const withPnl = executed.filter((t) => t.pnlUSD !== undefined);
     const totalPnl = withPnl.reduce((s, t) => s + (t.pnlUSD ?? 0), 0);
     const wins = withPnl.filter((t) => (t.pnlUSD ?? 0) > 0).length;
@@ -186,6 +215,7 @@ class TradeStore {
       avgTradeUSD: totalTrades > 0 ? parseFloat((totalExecuted / totalTrades).toFixed(2)) : 0,
       simulatedTrades: executed.filter((t) => t.simulated).length,
       liveTrades: executed.filter((t) => !t.simulated).length,
+      mtmTrades: withPnl.length,
       byStrategy,
     };
   }

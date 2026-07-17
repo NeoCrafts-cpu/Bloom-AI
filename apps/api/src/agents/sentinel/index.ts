@@ -7,6 +7,7 @@ import {
   recordLoss as persistLoss,
   resetLossStreak as persistResetLoss,
 } from "../../store/sentinelState.js";
+import { getMacroEvents, hasNearTermMacroRisk } from "../../services/sosovalue.js";
 
 export let sentinelStatus: {
   status: "running" | "idle" | "error";
@@ -17,10 +18,10 @@ export let sentinelStatus: {
 } = { status: "idle", lastRun: null, lastError: null, lastPreview: null, cycleCount: 0 };
 
 /** Dry-run risk preview for pipeline — uses a conservative default intent */
-export function runSentinelPreview(strategyId: string): SentinelReport {
+export async function runSentinelPreview(strategyId: string): Promise<SentinelReport> {
   sentinelStatus.status = "running";
   try {
-    const report = runSentinel({
+    const report = await runSentinel({
       strategyId,
       newsletterId: "pipeline-preview",
       userAddress: "0x0000000000000000000000000000000000000001",
@@ -62,7 +63,7 @@ const WHITELISTED_ADDRESSES = new Set([
  * No LLM involved. Evaluates raw intent against strict numeric limits.
  * If ANY check fails, the entire intent is BLOCKED and not forwarded to Broker.
  */
-export function runSentinel(intent: CopyTradeIntent): SentinelReport {
+export async function runSentinel(intent: CopyTradeIntent): Promise<SentinelReport> {
   const checks: SentinelCheck[] = [];
   const now = new Date().toISOString();
 
@@ -136,8 +137,6 @@ export function runSentinel(intent: CopyTradeIntent): SentinelReport {
   });
 
   // ── Check 7: ATR volatility proxy — high slippage tolerance signals high-vol ──
-  // If the user's maxSlippageBps > ATR_THRESHOLD_BPS we treat this as a
-  // high-volatility environment (proxy for ATR spike) and block the trade.
   const atrThreshold = config.SENTINEL_ATR_THRESHOLD_BPS;
   checks.push({
     rule: "ATR_VOLATILITY_FILTER",
@@ -192,6 +191,44 @@ export function runSentinel(intent: CopyTradeIntent): SentinelReport {
       message: !intent.userSignature
         ? "Mainnet trades require wallet EIP-712 confirmation"
         : undefined,
+    });
+  }
+
+  // ── Check 11: Macro Sentinel hard gate (SoSoValue calendar) ───────────────────
+  const macroHours = config.SENTINEL_MACRO_GATE_HOURS;
+  const macroResult = await getMacroEvents();
+  const macroRisk = hasNearTermMacroRisk(macroResult.data, macroHours);
+  checks.push({
+    rule: "MACRO_EVENT_HARD_GATE",
+    passed: !macroRisk,
+    actual: macroRisk ? "near-term high-importance event" : "clear",
+    limit: `no high-importance within ±${macroHours}h`,
+    message: macroRisk
+      ? `High-importance macro event within ±${macroHours}h — trade blocked by Sentinel hard gate`
+      : undefined,
+  });
+
+  // ── Check 12: TWAP basket guards ──────────────────────────────────────────────
+  if (intent.executionStyle === "twap") {
+    const dur = intent.twapDurationSec ?? 0;
+    checks.push({
+      rule: "TWAP_ENABLED",
+      passed: config.SODEX_ENABLE_TWAP,
+      actual: config.SODEX_ENABLE_TWAP ? "enabled" : "disabled",
+      limit: "SODEX_ENABLE_TWAP=1",
+      message: !config.SODEX_ENABLE_TWAP
+        ? "TWAP disabled — set SODEX_ENABLE_TWAP=1"
+        : undefined,
+    });
+    checks.push({
+      rule: "TWAP_DURATION",
+      passed: dur >= 60 && dur <= 86_400,
+      actual: dur,
+      limit: "60–86400 seconds",
+      message:
+        dur < 60 || dur > 86_400
+          ? `TWAP duration ${dur}s out of range (60–86400)`
+          : undefined,
     });
   }
 

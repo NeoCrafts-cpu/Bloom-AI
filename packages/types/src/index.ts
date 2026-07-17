@@ -68,6 +68,8 @@ export interface SSIIndex {
   publisherAddress?: string;
   version?: number;
   signalId?: string;
+  /** SoSoValue index ticker this SSI was mirrored from */
+  sourceSosoIndexId?: string;
 }
 
 export interface SSIRebalanceEvent {
@@ -86,6 +88,18 @@ export interface IndexComparison {
   weightDiffs: { symbol: string; weightA: number; weightB: number; delta: number }[];
   impliedNotionalA: number;
   impliedNotionalB: number;
+}
+
+/** SoSoValue official index vs Bloom SSI weight comparison */
+export interface SoSoSsiComparison {
+  sosoIndexId: string;
+  sosoName: string;
+  strategyId: string;
+  strategyName: string;
+  weightDiffs: { symbol: string; weightSoso: number; weightSsi: number; delta: number }[];
+  impliedNotionalSoso: number;
+  impliedNotionalSsi: number;
+  notionalUSD: number;
 }
 
 export interface SSIAssetWeight {
@@ -154,6 +168,10 @@ export interface CopyTradeIntent {
   /** Execution venue — spot (default) or perps when SODEX_ENABLE_PERPS_COPY=1 */
   venue?: "spot" | "perps";
   leverage?: number;
+  /** market (default) or TWAP basket when SODEX_ENABLE_TWAP=1 */
+  executionStyle?: "market" | "twap";
+  /** TWAP window in seconds (60–86400) */
+  twapDurationSec?: number;
 }
 
 export interface CopyTradeResult {

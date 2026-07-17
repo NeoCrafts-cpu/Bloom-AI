@@ -30,6 +30,30 @@ export async function strategyRouter(app: FastifyInstance) {
     return { data: result };
   });
 
+  app.post<{
+    Body: { sosoIndexId: string; strategyId: string; notionalUSD?: number };
+  }>("/compare-soso", async (req, reply) => {
+    const { sosoIndexId, strategyId, notionalUSD } = req.body ?? {};
+    if (!sosoIndexId || !strategyId) {
+      return reply.code(400).send({ error: "sosoIndexId and strategyId required" });
+    }
+    const result = await strategyStore.compareSosoToSsi(sosoIndexId, strategyId, notionalUSD);
+    if ("error" in result) return reply.code(404).send({ error: result.error });
+    return { data: result };
+  });
+
+  app.post<{
+    Body: { sosoIndexId: string; name?: string; description?: string };
+  }>("/from-soso", async (req, reply) => {
+    const { sosoIndexId, name, description } = req.body ?? {};
+    if (!sosoIndexId?.trim()) {
+      return reply.code(400).send({ error: "sosoIndexId required" });
+    }
+    const result = await strategyStore.mirrorFromSoso(sosoIndexId.trim(), { name, description });
+    if ("error" in result) return reply.code(400).send({ error: result.error });
+    return reply.code(201).send({ data: result.strategy });
+  });
+
   app.get("/", async () => {
     const strategies = await enrichWithLivePrices(strategyStore.getAll());
     return marketEnvelope(strategies, {

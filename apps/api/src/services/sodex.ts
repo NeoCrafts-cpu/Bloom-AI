@@ -362,7 +362,7 @@ export async function cancelOrder(
   );
 }
 
-/** TWAP order (spot or perps) — requires SODEX_ENABLE_TWAP=1 for live path callers */
+/** TWAP order (spot or perps) — requires live keys + SODEX_ENABLE_TWAP=1 */
 export async function placeTwapOrder(
   accountID: number,
   symbolID: number,
@@ -375,7 +375,7 @@ export async function placeTwapOrder(
   },
 ) {
   if (!config.SODEX_API_PRIVATE_KEY || !config.SODEX_API_KEY_NAME) {
-    return { clOrdID: params.clOrdID, status: "SUBMITTED", message: "Simulated TWAP" };
+    throw new Error("TWAP requires SODEX_API_PRIVATE_KEY and SODEX_API_KEY_NAME — refusing simulated TWAP");
   }
   if (!config.SODEX_ENABLE_TWAP) {
     throw new Error("TWAP disabled — set SODEX_ENABLE_TWAP=1");

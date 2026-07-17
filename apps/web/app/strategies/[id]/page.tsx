@@ -9,7 +9,7 @@ import {
   AlertCircle, Zap, ExternalLink,
 } from "lucide-react";
 import Navbar from "@/components/Navbar";
-import type { SSIIndex, SSIRebalanceEvent, IndexComparison } from "@bloom-ai/types";
+import type { SSIIndex, SSIRebalanceEvent, IndexComparison, SoSoSsiComparison } from "@bloom-ai/types";
 
 function StrategyDetailContent() {
   const params = useParams();
@@ -23,6 +23,9 @@ function StrategyDetailContent() {
   const [error, setError] = useState(false);
   const [compareId, setCompareId] = useState("");
   const [comparison, setComparison] = useState<IndexComparison | null>(null);
+  const [sosoIndexes, setSosoIndexes] = useState<{ id: string; name: string }[]>([]);
+  const [sosoCompareId, setSosoCompareId] = useState("");
+  const [sosoComparison, setSosoComparison] = useState<SoSoSsiComparison | null>(null);
   const [rebalanceReason, setRebalanceReason] = useState("");
   const [rebalancing, setRebalancing] = useState(false);
   const [rebalanceMsg, setRebalanceMsg] = useState<string | null>(null);
@@ -45,6 +48,19 @@ function StrategyDetailContent() {
         const firstOther = list.find((s: SSIIndex) => s.id !== id);
         setCompareId((current) => current || firstOther?.id || "");
       }
+      const sosoRes = await fetch("/api/market/indexes");
+      if (sosoRes.ok) {
+        const sosoJson = await sosoRes.json();
+        const sosoList = (Array.isArray(sosoJson?.data) ? sosoJson.data : []).map(
+          (row: { id?: string; index_id?: string; symbol?: string; name?: string } | string) => {
+            if (typeof row === "string") return { id: row, name: row.toUpperCase() };
+            const sid = row.id ?? row.index_id ?? row.symbol ?? "";
+            return { id: sid, name: row.name ?? String(sid).toUpperCase() };
+          },
+        ).filter((r: { id: string }) => r.id);
+        setSosoIndexes(sosoList);
+        setSosoCompareId((c) => c || sosoList[0]?.id || "");
+      }
     } catch {
       setError(true);
     } finally {
@@ -65,6 +81,23 @@ function StrategyDetailContent() {
       if (res.ok) {
         const json = await res.json();
         setComparison(json?.data ?? null);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  const runSosoCompare = async () => {
+    if (!sosoCompareId) return;
+    try {
+      const res = await fetch("/api/strategies/compare-soso", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sosoIndexId: sosoCompareId, strategyId: id, notionalUSD: 10000 }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        setSosoComparison(json?.data ?? null);
       }
     } catch {
       // ignore
@@ -237,6 +270,35 @@ function StrategyDetailContent() {
                   {comparison.weightDiffs.filter((d) => Math.abs(d.delta) > 0.01).slice(0, 5).map((d) => (
                     <p key={d.symbol} className="text-bloom-text-muted">
                       {d.symbol}: {(d.weightA * 100).toFixed(0)}% → {(d.weightB * 100).toFixed(0)}% ({d.delta >= 0 ? "+" : ""}{(d.delta * 100).toFixed(1)}%)
+                    </p>
+                  ))}
+                </div>
+              )}
+              <div className="border-t border-bloom-border my-4" />
+              <p className="text-[10px] font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
+                SoSo Index ↔ SSI
+              </p>
+              <select
+                value={sosoCompareId}
+                onChange={(e) => setSosoCompareId(e.target.value)}
+                className="w-full bg-bloom-bg border border-bloom-border rounded-xl px-3 py-2 text-xs text-bloom-text mb-3"
+              >
+                <option value="">Select SoSoValue index</option>
+                {sosoIndexes.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+              <button onClick={runSosoCompare} disabled={!sosoCompareId} className="orange-btn-outline text-xs w-full py-2 flex items-center justify-center gap-1 disabled:opacity-50">
+                Compare SoSo @ $10k
+              </button>
+              {sosoComparison && (
+                <div className="mt-3 text-xs space-y-1">
+                  <p className="text-bloom-text-muted">
+                    {sosoComparison.sosoName} vs {sosoComparison.strategyName}
+                  </p>
+                  {sosoComparison.weightDiffs.filter((d) => Math.abs(d.delta) > 0.01).slice(0, 5).map((d) => (
+                    <p key={d.symbol} className="text-bloom-text-muted">
+                      {d.symbol}: SoSo {(d.weightSoso * 100).toFixed(0)}% · SSI {(d.weightSsi * 100).toFixed(0)}% ({d.delta >= 0 ? "+" : ""}{(d.delta * 100).toFixed(1)}%)
                     </p>
                   ))}
                 </div>

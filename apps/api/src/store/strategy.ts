@@ -2,8 +2,19 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { v4 as uuid } from "uuid";
-import type { SSIIndex, SSIAssetWeight, SSIRebalanceEvent, IndexComparison } from "@bloom-ai/types";
-import { getMarketSnapshots } from "../services/sosovalue.js";
+import type {
+  SSIIndex,
+  SSIAssetWeight,
+  SSIRebalanceEvent,
+  IndexComparison,
+  SoSoSsiComparison,
+} from "@bloom-ai/types";
+import {
+  getMarketSnapshots,
+  getSoSoIndexList,
+  getSoSoIndexConstituents,
+  constituentsToSsiAssets,
+} from "../services/sosovalue.js";
 import { getSymbolIdMap } from "../services/sodex.js";
 import { wsManager } from "../ws/manager.js";
 
@@ -189,6 +200,89 @@ class StrategyStore {
     const impliedNotionalB = b.assets.reduce((s, asset) => s + notionalUSD * asset.weight, 0);
 
     return { idA, idB, weightDiffs, impliedNotionalA, impliedNotionalB };
+  }
+
+  async compareSosoToSsi(
+    sosoIndexId: string,
+    strategyId: string,
+    notionalUSD = 10000,
+  ): Promise<SoSoSsiComparison | { error: string }> {
+    const [indexes, constituentsResult, ssi] = await Promise.all([
+      getSoSoIndexList(),
+      getSoSoIndexConstituents(sosoIndexId),
+      this.getWithLivePrices(strategyId),
+    ]);
+    if (!ssi) return { error: "Strategy not found" };
+    if (!constituentsResult.data.length) {
+      return { error: `SoSo index "${sosoIndexId}" has no constituents` };
+    }
+
+    const sosoAssets = constituentsToSsiAssets(constituentsResult.data);
+    const meta = indexes.data.find((i) => (i.id ?? i.index_id ?? i.symbol) === sosoIndexId);
+    const symbols = new Set([
+      ...sosoAssets.map((x) => x.symbol),
+      ...ssi.assets.map((x) => x.symbol),
+    ]);
+    const weightDiffs = [...symbols].map((symbol) => {
+      const weightSoso = sosoAssets.find((x) => x.symbol === symbol)?.weight ?? 0;
+      const weightSsi = ssi.assets.find((x) => x.symbol === symbol)?.weight ?? 0;
+      return { symbol, weightSoso, weightSsi, delta: weightSsi - weightSoso };
+    });
+
+    return {
+      sosoIndexId,
+      sosoName: meta?.name ?? sosoIndexId.toUpperCase(),
+      strategyId,
+      strategyName: ssi.name,
+      weightDiffs,
+      impliedNotionalSoso: sosoAssets.reduce((s, a) => s + notionalUSD * a.weight, 0),
+      impliedNotionalSsi: ssi.assets.reduce((s, a) => s + notionalUSD * a.weight, 0),
+      notionalUSD,
+    };
+  }
+
+  async mirrorFromSoso(
+    sosoIndexId: string,
+    opts?: { name?: string; description?: string },
+  ): Promise<{ strategy: SSIIndex } | { error: string }> {
+    const [indexes, constituentsResult] = await Promise.all([
+      getSoSoIndexList(),
+      getSoSoIndexConstituents(sosoIndexId),
+    ]);
+    if (!constituentsResult.data.length) {
+      return { error: `SoSo index "${sosoIndexId}" has no constituents — cannot mirror` };
+    }
+
+    const assets = constituentsToSsiAssets(constituentsResult.data);
+    const validation = validateWeights(assets);
+    if (!validation.valid) return { error: validation.error! };
+
+    const meta = indexes.data.find((i) => (i.id ?? i.index_id ?? i.symbol) === sosoIndexId);
+    const label = opts?.name ?? `BLOOM-${(meta?.name ?? sosoIndexId).toUpperCase()}`;
+    const strategy: SSIIndex = {
+      id: `ssi-${uuid().slice(0, 8)}`,
+      name: label,
+      symbol: `${label.replace(/\s+/g, "-")}.ssi`,
+      description:
+        opts?.description ??
+        `Mirrored from SoSoValue index ${sosoIndexId}${constituentsResult.isStale ? " (stale cache)" : ""}`,
+      assets,
+      tvl: 0,
+      dailyFee: 0.0001,
+      status: "draft",
+      version: 1,
+      createdAt: new Date().toISOString(),
+      rebalancedAt: new Date().toISOString(),
+      sourceSosoIndexId: sosoIndexId,
+    };
+
+    this.add(strategy);
+    wsManager.broadcast({
+      type: "STRATEGY_CREATED",
+      payload: { strategy, source: "soso-mirror", sosoIndexId },
+      timestamp: strategy.createdAt,
+    });
+    return { strategy };
   }
 
   async getTradability(): Promise<Record<string, boolean>> {

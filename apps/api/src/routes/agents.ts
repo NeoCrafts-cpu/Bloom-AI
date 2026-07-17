@@ -290,7 +290,7 @@ export async function agentRouter(app: FastifyInstance) {
 
     if (pipelineStrategy) {
       agentStates.sentinel = { name: "sentinel", status: "running", lastRun: now, message: "Running risk preview..." };
-      sentinelDryRun = runSentinelPreview(pipelineStrategy.id);
+      sentinelDryRun = await runSentinelPreview(pipelineStrategy.id);
       agentStates.sentinel = mapSentinelState(sentinelDryRun);
     } else {
       agentStates.sentinel = { name: "sentinel", status: "idle", lastRun: now, message: "Skipped — no strategy generated" };

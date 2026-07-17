@@ -495,18 +495,57 @@ export interface SoSoIndex {
 }
 
 export interface SoSoIndexConstituent {
+  currency_id?: string;
   symbol: string;
   weight?: number;
   name?: string;
 }
 
+function normalizeIndexList(data: unknown): SoSoIndex[] {
+  // Official API: bare string array of tickers e.g. ["ssimag7", "ssilayer1"]
+  if (Array.isArray(data) && data.every((x) => typeof x === "string")) {
+    return (data as string[]).map((id) => ({
+      id,
+      index_id: id,
+      name: id.toUpperCase(),
+      symbol: id,
+    }));
+  }
+  if (Array.isArray(data)) {
+    return (data as SoSoIndex[]).map((row) => {
+      const id = row.index_id ?? row.id ?? row.symbol ?? row.name;
+      return {
+        ...row,
+        id,
+        index_id: row.index_id ?? id,
+        name: row.name || String(id ?? "").toUpperCase(),
+        symbol: row.symbol ?? id,
+      };
+    });
+  }
+  const list = (data as { list?: SoSoIndex[] })?.list;
+  return list ? normalizeIndexList(list) : [];
+}
+
+function normalizeConstituents(data: unknown): SoSoIndexConstituent[] {
+  const rows = Array.isArray(data)
+    ? data
+    : ((data as { list?: SoSoIndexConstituent[] })?.list ?? []);
+  return rows
+    .map((row) => ({
+      currency_id: row.currency_id,
+      symbol: String(row.symbol ?? "").toUpperCase(),
+      weight: typeof row.weight === "number" ? row.weight : Number(row.weight ?? 0),
+      name: row.name,
+    }))
+    .filter((row) => row.symbol.length > 0 && row.weight > 0);
+}
+
 async function fetchIndexList(): Promise<SoSoIndex[]> {
   if (!config.SOSOVALUE_API_KEY) return [];
-  const data = await get<{ list?: SoSoIndex[] } | SoSoIndex[]>("/indexes", { page_size: "50", page: "1" }).catch(
-    () => get<{ list?: SoSoIndex[] } | SoSoIndex[]>("/indices", { page_size: "50", page: "1" }),
-  );
-  if (Array.isArray(data)) return data;
-  return data?.list ?? [];
+  // Docs: GET /indices → string[]; legacy /indexes kept as fallback
+  const data = await get<unknown>("/indices").catch(() => get<unknown>("/indexes"));
+  return normalizeIndexList(data);
 }
 
 export async function getSoSoIndexList(): Promise<{ data: SoSoIndex[]; cachedAt: number; isStale: boolean }> {
@@ -523,15 +562,32 @@ export async function getSoSoIndexConstituents(
 ): Promise<{ data: SoSoIndexConstituent[]; cachedAt: number; isStale: boolean }> {
   try {
     return await cache.get(`soso-index-const-${indexId}`, TTL.SOSO_INDEX, async () => {
-      const data = await get<{ list?: SoSoIndexConstituent[] } | SoSoIndexConstituent[]>(
-        `/indexes/${indexId}/constituents`,
-      ).catch(() => get<{ list?: SoSoIndexConstituent[] } | SoSoIndexConstituent[]>(`/indices/${indexId}/constituents`));
-      if (Array.isArray(data)) return data;
-      return data?.list ?? [];
+      const data = await get<unknown>(`/indices/${indexId}/constituents`).catch(() =>
+        get<unknown>(`/indexes/${indexId}/constituents`),
+      );
+      return normalizeConstituents(data);
     });
   } catch {
     return { data: [], cachedAt: Date.now(), isStale: true };
   }
+}
+
+/** Convert SoSo constituents into SSI weights that sum to 1.0 */
+export function constituentsToSsiAssets(
+  constituents: SoSoIndexConstituent[],
+): { symbol: string; address: string; weight: number; currentPrice: number }[] {
+  const sum = constituents.reduce((s, c) => s + (c.weight ?? 0), 0);
+  if (sum <= 0) return [];
+  return constituents.map((c) => {
+    const symbol = c.symbol.toUpperCase();
+    const hex = Buffer.from(symbol, "utf8").toString("hex").padEnd(40, "0").slice(0, 40);
+    return {
+      symbol,
+      address: `0x${hex}`,
+      weight: (c.weight ?? 0) / sum,
+      currentPrice: 0,
+    };
+  });
 }
 
 // ─── Macro Events ─────────────────────────────────────────────────────────────

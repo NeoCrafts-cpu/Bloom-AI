@@ -42,6 +42,8 @@ export default function CopyTradeDashboard() {
   const [slippage, setSlippage]             = useState<number>(50); // bps
   const [venue, setVenue]                   = useState<"spot" | "perps">("spot");
   const [leverage, setLeverage]             = useState<number>(1);
+  const [executionStyle, setExecutionStyle] = useState<"market" | "twap">("market");
+  const [twapDurationSec, setTwapDurationSec] = useState<number>(300);
   const [sentinelReport, setSentinelReport] = useState<SentinelReport | null>(null);
   const [tradeResult, setTradeResult]       = useState<CopyTradeResult | null>(null);
   const [isLoading, setIsLoading]           = useState(false);
@@ -187,6 +189,8 @@ export default function CopyTradeDashboard() {
       userSignature: sig,
       venue,
       leverage: venue === "perps" ? leverage : undefined,
+      executionStyle,
+      twapDurationSec: executionStyle === "twap" ? twapDurationSec : undefined,
     };
 
     let report: SentinelReport;
@@ -444,6 +448,46 @@ export default function CopyTradeDashboard() {
                     />
                     <p className="text-[10px] text-amber-400 mt-1">
                       Requires SODEX_ENABLE_PERPS_COPY=1 on the API — Sentinel enforces max leverage.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
+                  Execution
+                </label>
+                <div className="flex gap-2">
+                  {(["market", "twap"] as const).map((style) => (
+                    <button
+                      key={style}
+                      type="button"
+                      onClick={() => setExecutionStyle(style)}
+                      className={`text-xs px-3 py-1.5 rounded-full border uppercase ${
+                        executionStyle === style
+                          ? "border-bloom-border-hover bg-bloom-orange-dim text-bloom-orange"
+                          : "border-bloom-border text-bloom-text-muted"
+                      }`}
+                    >
+                      {style}
+                    </button>
+                  ))}
+                </div>
+                {executionStyle === "twap" && (
+                  <div className="mt-3">
+                    <label className="block text-xs font-semibold text-bloom-text-muted uppercase tracking-wider mb-2">
+                      TWAP window: {Math.round(twapDurationSec / 60)}m
+                    </label>
+                    <input
+                      type="range"
+                      min={60}
+                      max={3600}
+                      step={60}
+                      value={twapDurationSec}
+                      onChange={(e) => setTwapDurationSec(Number(e.target.value))}
+                      className="w-full accent-bloom-orange"
+                    />
+                    <p className="text-[10px] text-amber-400 mt-1">
+                      Basket TWAP via SoDEX — requires SODEX_ENABLE_TWAP=1. Macro Sentinel hard-gates near high-importance events.
                     </p>
                   </div>
                 )}

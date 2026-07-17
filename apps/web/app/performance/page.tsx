@@ -33,6 +33,7 @@ interface PerformanceStats {
   avgTradeUSD: number;
   simulatedTrades: number;
   liveTrades: number;
+  mtmTrades?: number;
 }
 
 function timeAgo(iso: string) {
@@ -167,7 +168,11 @@ export default function PerformancePage() {
             value={stats && stats.totalTrades > 0
               ? `${stats.verifiedPnlUSD >= 0 ? "+" : ""}$${stats.verifiedPnlUSD.toFixed(2)}`
               : "—"}
-            sub={stats?.winRate != null ? `${stats.winRate.toFixed(1)}% win rate (marked trades)` : "requires mark-to-market PnL"}
+            sub={
+              stats?.winRate != null
+                ? `${stats.winRate.toFixed(1)}% win rate · ${stats.mtmTrades ?? 0} MTM`
+                : "mark-to-market from SoDEX marks"
+            }
             icon={TrendingUp}
             color="green"
             delay={0.21}
