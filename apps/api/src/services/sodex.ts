@@ -196,6 +196,31 @@ export interface SodexSymbol {
   stepSize: string;
   minQuantity: string;
   lastTradePrice: string;
+  /** SoDEX markets/symbols status string when present (often stale vs live reject reasons) */
+  status?: string;
+}
+
+/** Runtime denylist — REST status can still say TRADING while engine returns cancel-only. */
+const cancelOnlyUntil = new Map<number, number>();
+const CANCEL_ONLY_TTL_MS = 15 * 60 * 1000;
+
+export function markSymbolCancelOnly(symbolID: number): void {
+  if (!(symbolID > 0)) return;
+  cancelOnlyUntil.set(symbolID, Date.now() + CANCEL_ONLY_TTL_MS);
+}
+
+export function isSymbolCancelOnly(symbolID: number): boolean {
+  const until = cancelOnlyUntil.get(symbolID);
+  if (!until) return false;
+  if (Date.now() > until) {
+    cancelOnlyUntil.delete(symbolID);
+    return false;
+  }
+  return true;
+}
+
+export function isCancelOnlyError(message: string): boolean {
+  return /cancel\s*only/i.test(message);
 }
 
 // ─── Public Market Data ───────────────────────────────────────────────────────

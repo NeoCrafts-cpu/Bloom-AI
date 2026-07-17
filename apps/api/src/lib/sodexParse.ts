@@ -21,6 +21,7 @@ export interface NormalizedSodexSymbol {
   stepSize: string;
   minQuantity: string;
   lastTradePrice: string;
+  status?: string;
 }
 
 type RawTicker = {
@@ -73,6 +74,7 @@ export function normalizeSodexSymbols(data: unknown): NormalizedSodexSymbol[] {
     const baseAsset = String(r.baseAsset ?? r.baseCoin ?? "");
     const quoteAsset = String(r.quoteAsset ?? r.quoteCoin ?? "");
     if (!(symbolID > 0) || !symbol) continue;
+    const status = r.status != null ? String(r.status) : undefined;
     out.push({
       symbol,
       symbolID,
@@ -85,6 +87,7 @@ export function normalizeSodexSymbols(data: unknown): NormalizedSodexSymbol[] {
       stepSize: String(r.stepSize ?? "0"),
       minQuantity: String(r.minQuantity ?? "0"),
       lastTradePrice: String(r.lastTradePrice ?? r.lastPx ?? "0"),
+      status,
     });
   }
   return out;

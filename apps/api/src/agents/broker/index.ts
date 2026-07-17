@@ -10,6 +10,9 @@ import {
   getSymbols,
   getOrderHistory,
   updatePerpsLeverage,
+  isSymbolCancelOnly,
+  markSymbolCancelOnly,
+  isCancelOnlyError,
 } from "../../services/sodex.js";
 import { formatDecimalString } from "../../signing/eip712.js";
 import { getMarketSnapshots } from "../../services/sosovalue.js";
@@ -135,16 +138,42 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     throw new Error("TWAP disabled — set SODEX_ENABLE_TWAP=1");
   }
 
+  // Pre-filter: skip unknown / cancel-only markets, then renormalize weights so
+  // the full allocation still hits tradable legs (ETH is often cancel-only on testnet
+  // even when /markets/symbols still reports TRADING).
+  type Leg = { asset: (typeof index.assets)[number]; symbolID: number };
+  const legs: Leg[] = [];
   for (const asset of index.assets) {
     const symbolID = symbolIdMap[asset.symbol.toUpperCase()] ?? symbolIdMap[asset.symbol];
-    const price = asset.currentPrice || priceMap[asset.symbol] || 0;
-    const assetAllocation = intent.allocationUSD * asset.weight;
-
     if (!symbolID) {
-      console.warn(`[Broker] No symbolID for ${asset.symbol} — skipping`);
       skipped.push(`${asset.symbol}:no-symbolID`);
       continue;
     }
+    const metaStatus = symbolMeta[symbolID]?.status?.toUpperCase();
+    if (metaStatus && metaStatus !== "TRADING" && metaStatus !== "ONLINE") {
+      skipped.push(`${asset.symbol}:status-${metaStatus}`);
+      markSymbolCancelOnly(symbolID);
+      continue;
+    }
+    if (isSymbolCancelOnly(symbolID)) {
+      skipped.push(`${asset.symbol}:cancel-only`);
+      continue;
+    }
+    legs.push({ asset, symbolID });
+  }
+
+  const weightSum = legs.reduce((s, l) => s + l.asset.weight, 0);
+  if (!(weightSum > 0)) {
+    throw new Error(
+      `No tradable SoDEX markets for this strategy.` +
+        (skipped.length ? ` Skipped: ${skipped.join(", ")}` : "") +
+        ` (cancel-only / missing pairs are common on testnet — try BTC/SOL-heavy baskets)`,
+    );
+  }
+
+  for (const { asset, symbolID } of legs) {
+    const price = asset.currentPrice || priceMap[asset.symbol] || 0;
+    const assetAllocation = intent.allocationUSD * (asset.weight / weightSum);
 
     const clOrdID = `bloom-${intentId.slice(0, 6)}-${asset.symbol}-${Date.now()}`.slice(0, 36);
     const meta = symbolMeta[symbolID];
@@ -282,9 +311,17 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
         });
       }
     } catch (err) {
+      const msg = (err as Error).message ?? String(err);
       console.error(`[Broker] Order failed for ${asset.symbol}:`, err);
-      // Propagate error — do NOT silently produce fake fills
-      throw new Error(`Order execution failed for ${asset.symbol}: ${(err as Error).message}`);
+      // Cancel-only is a market-state reject — skip leg and keep basket alive
+      if (isCancelOnlyError(msg)) {
+        markSymbolCancelOnly(symbolID);
+        skipped.push(`${asset.symbol}:cancel-only`);
+        console.warn(`[Broker] ${asset.symbol} cancel-only — skipping remaining allocation for this leg`);
+        continue;
+      }
+      // Propagate other errors — do NOT silently produce fake fills
+      throw new Error(`Order execution failed for ${asset.symbol}: ${msg}`);
     }
   }
 
@@ -294,6 +331,10 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     throw new Error(
       `No SoDEX orders placed for strategy ${intent.strategyId}.${detail} Known bases: ${known || "none"}`,
     );
+  }
+
+  if (skipped.length) {
+    console.warn(`[Broker] Partial basket — skipped: ${skipped.join(", ")}`);
   }
 
   // ── Wait briefly for fills to settle then fetch order history ─────────────
@@ -321,7 +362,9 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
 
   brokerStatus.status = "idle";
   brokerStatus.lastRun = new Date().toISOString();
-  brokerStatus.lastMessage = `Executed ${fills.length} orders for $${totalExecuted.toFixed(2)} — Account #${accountID}`;
+  brokerStatus.lastMessage = skipped.length
+    ? `Executed ${fills.length} orders for $${totalExecuted.toFixed(2)} — skipped ${skipped.length} (e.g. cancel-only) — Account #${accountID}`
+    : `Executed ${fills.length} orders for $${totalExecuted.toFixed(2)} — Account #${accountID}`;
   brokerStatus.cycleCount++;
 
   if (intent.signalId) {
