@@ -454,7 +454,7 @@ export default function PerformancePage() {
 
           <p className="text-[10px] text-bloom-text-muted mt-4 flex items-center gap-1">
             <Zap size={10} />
-            Chain {VALUECHAIN_TESTNET.chainId} · Explorer {VALUECHAIN_TESTNET.blockExplorers.default.url}
+            Chain {VALUECHAIN_TESTNET.chainId} · Explorer {VALUECHAIN_TESTNET.blockExplorerUrls[0]}
           </p>
         </motion.div>
       </main>
