@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { AutoCopyGrantMessage } from "@bloom-ai/types";
 import { verifyAutoCopyGrant } from "../signing/autoCopyAuth.js";
 import { autoCopyStore } from "../store/autoCopyStore.js";
 
@@ -31,8 +32,8 @@ export async function autoCopyRouter(app: FastifyInstance) {
     if (!body?.userAddress || !body.signature) {
       return reply.code(400).send({ error: "userAddress and signature required" });
     }
-    const venue = body.venue === "perps" ? "perps" : "spot";
-    const grant = {
+    const venue: AutoCopyGrantMessage["venue"] = body.venue === "perps" ? "perps" : "spot";
+    const grant: AutoCopyGrantMessage = {
       userAddress: body.userAddress,
       maxAllocationUSD: Number(body.maxAllocationUSD),
       maxDailyUSD: Number(body.maxDailyUSD),
