@@ -191,9 +191,9 @@ export default function CopyTradeDashboard() {
         throw new Error((prepJson as { error?: string }).error ?? "Prepare failed");
       }
 
-      const prep = prepJson.data as {
+      type LegPrep = {
         prepareId: string;
-        sentinelReport: SentinelReport;
+        preview: { symbol: string; allocationUSD: number }[];
         typedData: {
           domain: {
             name: string;
@@ -207,43 +207,105 @@ export default function CopyTradeDashboard() {
         };
       };
 
+      const prep = prepJson.data as {
+        intentId: string;
+        sentinelReport: SentinelReport;
+        skipped?: string[];
+        legs: LegPrep[];
+      };
+
+      if (!Array.isArray(prep.legs) || prep.legs.length === 0) {
+        throw new Error("No tradable legs to sign");
+      }
+
       setSentinelReport(prep.sentinelReport);
       setStep("signing");
 
-      // User signs the real SoDEX batch — fills debit THIS wallet's USDC
-      const sodexSignature = await signTypedDataAsync({
-        domain: prep.typedData.domain,
-        types: prep.typedData.types,
-        primaryType: "ExchangeAction",
-        message: {
-          payloadHash: prep.typedData.message.payloadHash,
-          nonce: BigInt(prep.typedData.message.nonce),
-        },
-      });
+      // Sign & execute each leg separately — cancel-only symbols (often ETH) are skipped
+      const allOrders: CopyTradeResult["orders"] = [];
+      const skippedLegs: string[] = [...(prep.skipped ?? [])];
+      let lastSig = "";
 
-      setUserSignature(sodexSignature);
-      setStep("executing");
+      for (let i = 0; i < prep.legs.length; i++) {
+        const leg = prep.legs[i];
+        const label = leg.preview[0]?.symbol ?? `leg ${i + 1}`;
+        setStep("signing");
 
-      const execRes = await fetch(`${API}/api/broker/execute`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prepareId: prep.prepareId,
-          sodexSignature,
-          userAddress: address,
-          strategyId,
-          allocationUSD: allocation,
-          maxSlippageBps: slippage,
-          newsletterId: "nl-latest",
-        }),
-      });
-      const execJson = await execRes.json().catch(() => ({}));
-      if (!execRes.ok) {
-        throw new Error((execJson as { error?: string }).error ?? "Execution failed");
+        let sodexSignature: string;
+        try {
+          sodexSignature = await signTypedDataAsync({
+            domain: leg.typedData.domain,
+            types: leg.typedData.types,
+            primaryType: "ExchangeAction",
+            message: {
+              payloadHash: leg.typedData.message.payloadHash,
+              nonce: BigInt(leg.typedData.message.nonce),
+            },
+          });
+        } catch (signErr) {
+          // User rejected mid-basket — keep any fills already done
+          if (allOrders.length > 0) break;
+          throw signErr;
+        }
+
+        lastSig = sodexSignature;
+        setUserSignature(sodexSignature);
+        setStep("executing");
+
+        const execRes = await fetch(`${API}/api/broker/execute`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prepareId: leg.prepareId,
+            sodexSignature,
+            userAddress: address,
+            strategyId,
+            allocationUSD: allocation,
+            maxSlippageBps: slippage,
+            newsletterId: "nl-latest",
+          }),
+        });
+        const execJson = await execRes.json().catch(() => ({}));
+        if (!execRes.ok) {
+          const errMsg = (execJson as { error?: string }).error ?? "Execution failed";
+          if (/cancel\s*only/i.test(errMsg)) {
+            skippedLegs.push(`${label}:cancel-only`);
+            continue;
+          }
+          // Non-cancel-only failure: if we already have fills, stop; else hard fail
+          if (allOrders.length > 0) {
+            skippedLegs.push(`${label}:${errMsg.slice(0, 80)}`);
+            break;
+          }
+          throw new Error(errMsg);
+        }
+        const legResult = (execJson?.data ?? execJson) as CopyTradeResult;
+        if (Array.isArray(legResult?.orders)) {
+          allOrders.push(...legResult.orders);
+        }
       }
-      const result = (execJson?.data ?? execJson) as CopyTradeResult;
-      if (!result?.orders) throw new Error("Invalid execution response");
+
+      if (allOrders.length === 0) {
+        throw new Error(
+          `No fills — all legs failed or were cancel-only.` +
+            (skippedLegs.length ? ` (${skippedLegs.join(", ")})` : ""),
+        );
+      }
+
+      const result: CopyTradeResult = {
+        intentId: prep.intentId,
+        sentinelStatus: "passed",
+        orders: allOrders,
+        totalExecutedUSD: allOrders.reduce((s, o) => s + o.fillPrice * o.fillQuantity, 0),
+        timestamp: new Date().toISOString(),
+        source: "manual",
+      };
+      if (skippedLegs.length) {
+        result.sentinelReason = `Partial basket — skipped: ${skippedLegs.join(", ")}`;
+      }
+
       setTradeResult(result);
+      setUserSignature(lastSig);
       const firstOrderId = result.orders[0]?.orderId;
       setTxHash(isOnChainTxHash(firstOrderId) ? firstOrderId! : "");
       setStep("complete");

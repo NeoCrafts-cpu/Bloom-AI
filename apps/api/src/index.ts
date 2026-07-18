@@ -70,7 +70,6 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
   async (req, reply) => {
     const intent = req.body;
     const { runSentinel } = await import("./agents/sentinel/index.js");
-    const { prepareUserSpotBasket } = await import("./agents/broker/prepareBasket.js");
     const { tradeStore } = await import("./store/tradeStore.js");
 
     const sentinel = await runSentinel(intent);
@@ -84,18 +83,23 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
     }
 
     try {
-      const { session, typedData } = await prepareUserSpotBasket(intent);
+      const { prepareUserSpotLegs } = await import("./agents/broker/prepareBasket.js");
+      const { legs, skipped, intentId, accountID } = await prepareUserSpotLegs(intent);
       return {
         data: {
-          prepareId: session.id,
-          accountID: session.accountID,
-          userAddress: session.userAddress,
-          intentId: session.intentId,
-          preview: session.preview,
-          skipped: session.skipped,
-          expiresAt: session.expiresAt,
-          typedData,
+          intentId,
+          accountID,
+          userAddress: intent.userAddress.toLowerCase(),
+          skipped,
           sentinelReport: sentinel,
+          // One prepare session + typedData per leg — sign/execute separately so
+          // cancel-only markets (e.g. ETH on testnet) can be skipped without failing BTC/SOL.
+          legs: legs.map(({ session, typedData }) => ({
+            prepareId: session.id,
+            expiresAt: session.expiresAt,
+            preview: session.preview,
+            typedData,
+          })),
         },
       };
     } catch (err) {

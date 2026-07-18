@@ -14,11 +14,7 @@ import { formatDecimalString, serializeSpotOrder, hashExchangePayload } from "..
 import { getNonce } from "../../signing/nonceManager.js";
 import { prepareStore, type PrepareSession } from "../../store/prepareStore.js";
 
-/**
- * Build a spot batchNewOrder for the user's own SoDEX account (MetaMask wallet).
- * Returns EIP-712 typed data for the user to sign — no server private key involved.
- */
-export async function prepareUserSpotBasket(intent: CopyTradeIntent): Promise<{
+export type PreparedLeg = {
   session: PrepareSession;
   typedData: {
     domain: {
@@ -31,6 +27,25 @@ export async function prepareUserSpotBasket(intent: CopyTradeIntent): Promise<{
     primaryType: "ExchangeAction";
     message: { payloadHash: string; nonce: number };
   };
+};
+
+function isBlockedStatus(status?: string): boolean {
+  if (!status) return false;
+  const s = status.toUpperCase();
+  if (s === "TRADING" || s === "ONLINE") return false;
+  // CANCEL_ONLY / CANCEL-ONLY / etc.
+  return true;
+}
+
+/**
+ * Build one SoDEX batchNewOrder prepare-session per tradable leg.
+ * Per-leg signing lets us skip cancel-only markets (ETH on testnet) without failing the whole basket.
+ */
+export async function prepareUserSpotLegs(intent: CopyTradeIntent): Promise<{
+  legs: PreparedLeg[];
+  skipped: string[];
+  intentId: string;
+  accountID: number;
 }> {
   if (intent.venue === "perps") {
     throw new Error("Per-wallet signing currently supports spot only — switch Venue to Spot");
@@ -72,17 +87,18 @@ export async function prepareUserSpotBasket(intent: CopyTradeIntent): Promise<{
   const symbolMeta = Object.fromEntries(symbols.map((s) => [s.symbolID, s]));
 
   type Leg = { asset: (typeof index.assets)[number]; symbolID: number };
-  const legs: Leg[] = [];
+  const candidateLegs: Leg[] = [];
   const skipped: string[] = [];
 
   for (const asset of index.assets) {
-    const symbolID = symbolIdMap[asset.symbol.toUpperCase()] ?? symbolIdMap[asset.symbol];
+    const base = asset.symbol.toUpperCase();
+    const symbolID = symbolIdMap[base] ?? symbolIdMap[asset.symbol];
     if (!symbolID) {
       skipped.push(`${asset.symbol}:no-symbolID`);
       continue;
     }
-    const metaStatus = symbolMeta[symbolID]?.status?.toUpperCase();
-    if (metaStatus && metaStatus !== "TRADING" && metaStatus !== "ONLINE") {
+    const metaStatus = symbolMeta[symbolID]?.status;
+    if (isBlockedStatus(metaStatus)) {
       skipped.push(`${asset.symbol}:status-${metaStatus}`);
       markSymbolCancelOnly(symbolID);
       continue;
@@ -91,22 +107,23 @@ export async function prepareUserSpotBasket(intent: CopyTradeIntent): Promise<{
       skipped.push(`${asset.symbol}:cancel-only`);
       continue;
     }
-    legs.push({ asset, symbolID });
+    candidateLegs.push({ asset, symbolID });
   }
 
-  const weightSum = legs.reduce((s, l) => s + l.asset.weight, 0);
+  const weightSum = candidateLegs.reduce((s, l) => s + l.asset.weight, 0);
   if (!(weightSum > 0)) {
     throw new Error(
       `No tradable SoDEX markets for this strategy.` +
-        (skipped.length ? ` Skipped: ${skipped.join(", ")}` : ""),
+        (skipped.length ? ` Skipped: ${skipped.join(", ")}` : "") +
+        ` (cancel-only pairs are common on testnet)`,
     );
   }
 
   const intentId = uuid();
-  const preview: PrepareSession["preview"] = [];
-  const orders: Record<string, unknown>[] = [];
+  const accountID = accountState.accountID;
+  const legs: PreparedLeg[] = [];
 
-  for (const { asset, symbolID } of legs) {
+  for (const { asset, symbolID } of candidateLegs) {
     const price = asset.currentPrice || priceMap[asset.symbol] || 0;
     const assetAllocation = intent.allocationUSD * (asset.weight / weightSum);
     const meta = symbolMeta[symbolID];
@@ -118,68 +135,76 @@ export async function prepareUserSpotBasket(intent: CopyTradeIntent): Promise<{
 
     const clOrdID = `bloom-${intentId.slice(0, 6)}-${asset.symbol}-${Date.now()}`.slice(0, 36);
     const fundsDecimal = formatDecimalString(assetAllocation, 6);
-    orders.push(
-      serializeSpotOrder({
-        symbolID,
-        clOrdID,
-        side: 1,
-        type: 2,
-        timeInForce: 3,
-        funds: fundsDecimal,
-      }),
-    );
-    preview.push({
-      symbol: `${asset.symbol}/USDC`,
-      funds: fundsDecimal,
+    const order = serializeSpotOrder({
+      symbolID,
       clOrdID,
-      price,
-      allocationUSD: assetAllocation,
+      side: 1,
+      type: 2,
+      timeInForce: 3,
+      funds: fundsDecimal,
+    });
+    const params = { accountID, orders: [order] };
+    const actionType = "batchNewOrder";
+    const payloadHash = hashExchangePayload({ type: actionType, params });
+    const nonce = await getNonce(intent.userAddress);
+
+    const preview = [
+      {
+        symbol: `${asset.symbol}/USDC`,
+        funds: fundsDecimal,
+        clOrdID,
+        price,
+        allocationUSD: assetAllocation,
+        symbolID,
+      },
+    ];
+
+    const session = prepareStore.create({
+      userAddress: intent.userAddress.toLowerCase(),
+      intent,
+      accountID,
+      nonce,
+      domainName: "spot",
+      actionType,
+      params,
+      payloadHash,
+      preview,
+      skipped: [...skipped],
+      intentId,
+    });
+
+    legs.push({
+      session,
+      typedData: {
+        domain: {
+          name: "spot",
+          version: "1",
+          chainId: config.SODEX_CHAIN_ID,
+          verifyingContract: "0x0000000000000000000000000000000000000000" as `0x${string}`,
+        },
+        types: {
+          ExchangeAction: [
+            { name: "payloadHash", type: "bytes32" },
+            { name: "nonce", type: "uint64" },
+          ],
+        },
+        primaryType: "ExchangeAction",
+        message: { payloadHash, nonce },
+      },
     });
   }
 
-  if (orders.length === 0) {
+  if (legs.length === 0) {
     throw new Error(
       `No orders to sign.` + (skipped.length ? ` Skipped: ${skipped.join(", ")}` : ""),
     );
   }
 
-  const accountID = accountState.accountID;
-  const params = { accountID, orders };
-  const actionType = "batchNewOrder";
-  const payload = { type: actionType, params };
-  const payloadHash = hashExchangePayload(payload);
-  const nonce = await getNonce(intent.userAddress);
+  return { legs, skipped, intentId, accountID };
+}
 
-  const session = prepareStore.create({
-    userAddress: intent.userAddress.toLowerCase(),
-    intent,
-    accountID,
-    nonce,
-    domainName: "spot",
-    actionType,
-    params,
-    payloadHash,
-    preview,
-    skipped,
-    intentId,
-  });
-
-  const typedData = {
-    domain: {
-      name: "spot",
-      version: "1",
-      chainId: config.SODEX_CHAIN_ID,
-      verifyingContract: "0x0000000000000000000000000000000000000000" as `0x${string}`,
-    },
-    types: {
-      ExchangeAction: [
-        { name: "payloadHash", type: "bytes32" },
-        { name: "nonce", type: "uint64" },
-      ],
-    },
-    primaryType: "ExchangeAction" as const,
-    message: { payloadHash, nonce },
-  };
-
-  return { session, typedData };
+/** @deprecated — use prepareUserSpotLegs; kept for single-leg callers */
+export async function prepareUserSpotBasket(intent: CopyTradeIntent) {
+  const { legs } = await prepareUserSpotLegs(intent);
+  return legs[0];
 }

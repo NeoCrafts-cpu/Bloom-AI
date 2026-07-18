@@ -17,6 +17,7 @@ export interface PrepareSession {
     clOrdID: string;
     price: number;
     allocationUSD: number;
+    symbolID?: number;
   }[];
   skipped: string[];
   intentId: string;

@@ -4,7 +4,11 @@ import {
   normalizeEcdsaToTypedSig,
   verifyExchangeActionSignature,
 } from "../../signing/eip712.js";
-import { submitUserSignedSpotBatch, isCancelOnlyError } from "../../services/sodex.js";
+import {
+  submitUserSignedSpotBatch,
+  isCancelOnlyError,
+  markSymbolCancelOnly,
+} from "../../services/sodex.js";
 import { wsManager } from "../../ws/manager.js";
 
 /**
@@ -131,8 +135,19 @@ export async function executePreparedUserTrade(args: {
 
     return result;
   } catch (err) {
+    const msg = (err as Error).message;
+    if (isCancelOnlyError(msg)) {
+      for (const leg of session.preview) {
+        if (leg.symbolID) markSymbolCancelOnly(leg.symbolID);
+      }
+      // Also mark from serialized orders if preview lacks symbolID
+      for (const o of session.params.orders) {
+        const sid = Number((o as { symbolID?: number }).symbolID);
+        if (sid > 0) markSymbolCancelOnly(sid);
+      }
+    }
     brokerStatus.status = "error";
-    brokerStatus.lastError = (err as Error).message;
+    brokerStatus.lastError = msg;
     throw err;
   }
 }
