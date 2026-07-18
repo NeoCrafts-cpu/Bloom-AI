@@ -296,9 +296,31 @@ export async function agentRouter(app: FastifyInstance) {
       agentStates.sentinel = { name: "sentinel", status: "idle", lastRun: now, message: "Skipped — no strategy generated" };
     }
 
-    brokerStatus.lastMessage = pipelineStrategy
-      ? "Ready for confirmation — execute via Copy Trade"
-      : "Awaiting strategy signal from pipeline";
+    let autoCopySummary: Awaited<
+      ReturnType<typeof import("../services/autoCopy.js").triggerAutoCopyForStrategy>
+    > | null = null;
+
+    if (pipelineStrategy) {
+      try {
+        const { triggerAutoCopyForStrategy } = await import("../services/autoCopy.js");
+        autoCopySummary = await triggerAutoCopyForStrategy(
+          pipelineStrategy,
+          pipelineNewsletter?.id,
+        );
+        if (autoCopySummary.executed > 0) {
+          brokerStatus.lastMessage = `Auto-Copy executed ${autoCopySummary.executed} trade(s) for ${pipelineStrategy.id}`;
+        } else if (autoCopySummary.ran > 0) {
+          brokerStatus.lastMessage = `Auto-Copy ran (${autoCopySummary.blocked} blocked, ${autoCopySummary.skipped} skipped) — or confirm manually`;
+        } else {
+          brokerStatus.lastMessage = "Ready for confirmation — execute via Copy Trade";
+        }
+      } catch (err) {
+        console.warn("[AutoCopy] pipeline hook failed:", (err as Error).message);
+        brokerStatus.lastMessage = "Ready for confirmation — execute via Copy Trade";
+      }
+    } else {
+      brokerStatus.lastMessage = "Awaiting strategy signal from pipeline";
+    }
     agentStates.broker = mapBrokerState();
 
     return {
@@ -308,6 +330,7 @@ export async function agentRouter(app: FastifyInstance) {
         strategy: pipelineStrategy,
         sentinelDryRun,
         failed: pipelineFailed,
+        autoCopy: autoCopySummary,
       },
     };
   });

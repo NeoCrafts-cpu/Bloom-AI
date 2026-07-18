@@ -11,6 +11,7 @@ import { agentRouter } from "./routes/agents.js";
 import { mcpRouter } from "./routes/mcp.js";
 import { ledgerRouter } from "./routes/ledger.js";
 import { socialRouter } from "./routes/social.js";
+import { autoCopyRouter } from "./routes/autoCopy.js";
 import { startJournalistAgent } from "./agents/journalist/index.js";
 import { startChartAnalystAgent } from "./agents/chartanalyst/index.js";
 import { wsManager } from "./ws/manager.js";
@@ -49,6 +50,7 @@ await app.register(agentRouter, { prefix: "/api/agents" });
 await app.register(mcpRouter, { prefix: "/api/mcp" });
 await app.register(ledgerRouter, { prefix: "/api/ledger" });
 await app.register(socialRouter, { prefix: "/api/social" });
+await app.register(autoCopyRouter, { prefix: "/api/auto-copy" });
 
 // ── Standalone sentinel & broker endpoints (frontend shortcuts) ─────────────
 app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(

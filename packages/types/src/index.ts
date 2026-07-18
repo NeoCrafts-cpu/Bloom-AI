@@ -184,6 +184,55 @@ export interface CopyTradeResult {
   totalExecutedUSD: number;
   timestamp: string;
   simulated?: boolean;
+  /** manual MetaMask oneshot vs always-on Auto-Copy grant */
+  source?: "manual" | "auto-copy";
+}
+
+/** EIP-712 AutoCopyGrant — user authorizes unattended copy within limits until expiresAt */
+export interface AutoCopyGrantMessage {
+  userAddress: string;
+  maxAllocationUSD: number;
+  maxDailyUSD: number;
+  maxSlippageBps: number;
+  venue: "spot" | "perps";
+  expiresAt: number;
+  nonce: number;
+}
+
+export interface AutoCopySubscription {
+  id: string;
+  userAddress: string;
+  enabled: boolean;
+  maxAllocationUSD: number;
+  maxDailyUSD: number;
+  maxSlippageBps: number;
+  venue: "spot" | "perps";
+  /** Copy every newly minted pipeline strategy */
+  mode: "latest_pipeline";
+  grantSignature: string;
+  grantExpiresAt: number;
+  grantNonce: number;
+  spentTodayUSD: number;
+  spentDayKey: string;
+  lastRunAt: string | null;
+  lastError: string | null;
+  lastStrategyId: string | null;
+  lastResult: "executed" | "blocked" | "skipped" | "error" | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutoCopyRun {
+  id: string;
+  subscriptionId: string;
+  userAddress: string;
+  strategyId: string;
+  status: "executed" | "blocked" | "skipped" | "error";
+  message: string;
+  allocationUSD: number;
+  executedUSD?: number;
+  tradeId?: string;
+  timestamp: string;
 }
 
 // ─── Sentinel Risk ───────────────────────────────────────────────────────────

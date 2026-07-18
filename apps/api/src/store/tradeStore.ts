@@ -23,6 +23,7 @@ export interface TradeRecord {
   pnlUSD?: number;
   newsletterId?: string;
   signalId?: string;
+  source?: "manual" | "auto-copy";
 }
 
 export interface AuditEntry {
@@ -108,6 +109,7 @@ class TradeStore {
       orders: result.orders,
       newsletterId: intent.newsletterId,
       signalId: intent.signalId,
+      source: result.source ?? "manual",
     });
     this.recordAudit({
       type: simulated ? "simulated_fill" : "execution_success",
@@ -177,33 +179,116 @@ class TradeStore {
     const totalTrades = executed.length;
     const totalExecuted = executed.reduce((s, t) => s + t.totalExecutedUSD, 0);
 
-    // Per-strategy breakdown
-    const byStrategy: Record<string, { trades: number; notional: number; simulated: number }> = {};
+    const byStrategy: Record<
+      string,
+      { trades: number; notional: number; simulated: number; pnlUSD: number; wins: number; mtm: number }
+    > = {};
     for (const t of executed) {
       if (!byStrategy[t.strategyId]) {
-        byStrategy[t.strategyId] = { trades: 0, notional: 0, simulated: 0 };
+        byStrategy[t.strategyId] = { trades: 0, notional: 0, simulated: 0, pnlUSD: 0, wins: 0, mtm: 0 };
       }
-      byStrategy[t.strategyId].trades++;
-      byStrategy[t.strategyId].notional += t.totalExecutedUSD;
-      if (t.simulated) byStrategy[t.strategyId].simulated++;
+      const row = byStrategy[t.strategyId];
+      row.trades++;
+      row.notional += t.totalExecutedUSD;
+      if (t.simulated) row.simulated++;
+      if (t.pnlUSD !== undefined) {
+        row.pnlUSD += t.pnlUSD;
+        row.mtm++;
+        if (t.pnlUSD > 0) row.wins++;
+      }
+    }
+    for (const id of Object.keys(byStrategy)) {
+      byStrategy[id].notional = parseFloat(byStrategy[id].notional.toFixed(2));
+      byStrategy[id].pnlUSD = parseFloat(byStrategy[id].pnlUSD.toFixed(2));
     }
 
-    // PnL only from trades that have real MTM (fill vs mark) — never fabricate win rate
-    const withPnl = executed.filter((t) => t.pnlUSD !== undefined);
-    const totalPnl = withPnl.reduce((s, t) => s + (t.pnlUSD ?? 0), 0);
-    const wins = withPnl.filter((t) => (t.pnlUSD ?? 0) > 0).length;
-    const winRate = withPnl.length > 0 ? (wins / withPnl.length) * 100 : null;
+    // Per-asset fill analytics from real order legs + MTM
+    const byAsset: Record<
+      string,
+      { fills: number; notional: number; qty: number; pnlUSD: number; avgFillPrice: number }
+    > = {};
+    const normalize = (sym: string) =>
+      sym.replace(/^v/, "").split(/[_/-]/)[0].toUpperCase();
 
-    // Max drawdown from cumulative PnL curve
+    for (const t of executed) {
+      const tradePnl = t.pnlUSD;
+      const legs = t.orders?.length ?? 0;
+      for (const o of t.orders ?? []) {
+        const base = normalize(o.symbol);
+        if (!byAsset[base]) {
+          byAsset[base] = { fills: 0, notional: 0, qty: 0, pnlUSD: 0, avgFillPrice: 0 };
+        }
+        const row = byAsset[base];
+        const notional = o.fillPrice * o.fillQuantity;
+        row.fills++;
+        row.notional += notional;
+        row.qty += o.fillQuantity;
+        // Attribute trade MTM evenly across legs when present
+        if (tradePnl !== undefined && legs > 0) {
+          row.pnlUSD += tradePnl / legs;
+        }
+      }
+    }
+    for (const base of Object.keys(byAsset)) {
+      const row = byAsset[base];
+      row.avgFillPrice = row.qty > 0 ? row.notional / row.qty : 0;
+      row.notional = parseFloat(row.notional.toFixed(2));
+      row.pnlUSD = parseFloat(row.pnlUSD.toFixed(2));
+      row.avgFillPrice = parseFloat(row.avgFillPrice.toFixed(4));
+      row.qty = parseFloat(row.qty.toFixed(6));
+    }
+
+    // Daily buckets
+    const byDayMap: Record<string, { date: string; trades: number; notional: number; pnlUSD: number }> = {};
+    for (const t of executed) {
+      const date = t.timestamp.slice(0, 10);
+      if (!byDayMap[date]) byDayMap[date] = { date, trades: 0, notional: 0, pnlUSD: 0 };
+      byDayMap[date].trades++;
+      byDayMap[date].notional += t.totalExecutedUSD;
+      byDayMap[date].pnlUSD += t.pnlUSD ?? 0;
+    }
+    const byDay = Object.values(byDayMap)
+      .sort((a, b) => a.date.localeCompare(b.date))
+      .map((d) => ({
+        ...d,
+        notional: parseFloat(d.notional.toFixed(2)),
+        pnlUSD: parseFloat(d.pnlUSD.toFixed(2)),
+      }));
+
+    // Equity curve (cumulative verified MTM)
+    let cumulative = 0;
     let peak = 0;
     let maxDrawdown = 0;
-    let cumulative = 0;
-    for (const t of executed) {
-      cumulative += t.pnlUSD ?? 0;
+    const equityCurve: { t: string; pnl: number; cumulative: number }[] = [];
+    const chronological = [...executed].sort(
+      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime(),
+    );
+    for (const t of chronological) {
+      const pnl = t.pnlUSD ?? 0;
+      cumulative += pnl;
       if (cumulative > peak) peak = cumulative;
       const dd = peak - cumulative;
       if (dd > maxDrawdown) maxDrawdown = dd;
+      equityCurve.push({
+        t: t.timestamp,
+        pnl: parseFloat(pnl.toFixed(2)),
+        cumulative: parseFloat(cumulative.toFixed(2)),
+      });
     }
+
+    const withPnl = executed.filter((t) => t.pnlUSD !== undefined);
+    const totalPnl = withPnl.reduce((s, t) => s + (t.pnlUSD ?? 0), 0);
+    const wins = withPnl.filter((t) => (t.pnlUSD ?? 0) > 0).length;
+    const losses = withPnl.filter((t) => (t.pnlUSD ?? 0) < 0).length;
+    const winRate = withPnl.length > 0 ? (wins / withPnl.length) * 100 : null;
+    const avgWin =
+      wins > 0
+        ? withPnl.filter((t) => (t.pnlUSD ?? 0) > 0).reduce((s, t) => s + (t.pnlUSD ?? 0), 0) / wins
+        : 0;
+    const avgLoss =
+      losses > 0
+        ? withPnl.filter((t) => (t.pnlUSD ?? 0) < 0).reduce((s, t) => s + (t.pnlUSD ?? 0), 0) / losses
+        : 0;
 
     return {
       totalTrades,
@@ -215,8 +300,16 @@ class TradeStore {
       avgTradeUSD: totalTrades > 0 ? parseFloat((totalExecuted / totalTrades).toFixed(2)) : 0,
       simulatedTrades: executed.filter((t) => t.simulated).length,
       liveTrades: executed.filter((t) => !t.simulated).length,
+      autoCopyTrades: executed.filter((t) => t.source === "auto-copy").length,
       mtmTrades: withPnl.length,
+      wins,
+      losses,
+      avgWinUSD: parseFloat(avgWin.toFixed(2)),
+      avgLossUSD: parseFloat(avgLoss.toFixed(2)),
       byStrategy,
+      byAsset,
+      byDay,
+      equityCurve,
     };
   }
 }

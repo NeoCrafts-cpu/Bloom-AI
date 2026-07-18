@@ -9,6 +9,7 @@ import { Wallet, Shield, Zap, CheckCircle, XCircle, Loader, ExternalLink, Layers
 import type { CopyTradeIntent, CopyTradeResult, SentinelReport, SSIIndex } from "@bloom-ai/types";
 import SentinelAlert from "./SentinelAlert";
 import OrderFeedPanel from "./OrderFeedPanel";
+import AutoCopyPanel from "./AutoCopyPanel";
 import { valueChainTestnet } from "@/lib/wagmi";
 import { VALUECHAIN_TESTNET, VALUECHAIN_WALLET_PARAMS, SODEX_TESTNET_TRADE_URL, isOnChainTxHash } from "@/lib/valuechain";
 
@@ -750,8 +751,9 @@ export default function CopyTradeDashboard() {
         )}
       </div>
 
-      {/* Right — live order feed */}
-      <div className="lg:col-span-1">
+      {/* Right — Auto-Copy + live order feed */}
+      <div className="lg:col-span-1 space-y-5">
+        <AutoCopyPanel />
         <OrderFeedPanel />
       </div>
     </div>

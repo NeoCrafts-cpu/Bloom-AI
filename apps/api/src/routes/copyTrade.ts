@@ -42,19 +42,9 @@ export async function copyTradeRouter(app: FastifyInstance) {
     const perf = tradeStore.getPerformance();
     return {
       data: {
-        totalTrades: perf.totalTrades,
-        blockedTrades: perf.blockedTrades,
-        totalExecutedUSD: perf.totalExecutedUSD,
-        verifiedPnlUSD: perf.verifiedPnlUSD,
-        winRate: perf.winRate,
-        maxDrawdownUSD: perf.maxDrawdownUSD,
-        avgTradeUSD: perf.avgTradeUSD,
-        simulatedTrades: perf.simulatedTrades,
-        liveTrades: perf.liveTrades,
-        mtmTrades: perf.mtmTrades,
+        ...perf,
         mtmUpdated,
         markCache: getMarkPriceCacheStatus(),
-        byStrategy: perf.byStrategy,
       },
     };
   });
