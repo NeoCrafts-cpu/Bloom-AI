@@ -23,6 +23,8 @@ export interface MarketSnapshot {
     marketCap?: number;
     updatedAt: string;
 }
+export type SignalSource = "journalist" | "chartanalyst" | "strategist" | "discovery";
+export type SignalStatus = "open" | "executed" | "blocked" | "expired" | "resolved";
 export interface SmartMoneyNewsletter {
     id: string;
     title: string;
@@ -34,7 +36,10 @@ export interface SmartMoneyNewsletter {
     sentiment: NewsSentiment[];
     publishedAt: string;
     strategyId?: string;
+    source?: SignalSource;
+    signalId?: string;
 }
+export type IndexPublisherStatus = "draft" | "published" | "archived";
 export interface SSIIndex {
     id: string;
     name: string;
@@ -45,6 +50,49 @@ export interface SSIIndex {
     dailyFee: number;
     createdAt: string;
     rebalancedAt: string;
+    status?: IndexPublisherStatus;
+    publisherAddress?: string;
+    version?: number;
+    signalId?: string;
+    /** SoSoValue index ticker this SSI was mirrored from */
+    sourceSosoIndexId?: string;
+}
+export interface SSIRebalanceEvent {
+    id: string;
+    strategyId: string;
+    priorAssets: SSIAssetWeight[];
+    newAssets: SSIAssetWeight[];
+    reason: string;
+    signalId?: string;
+    timestamp: string;
+}
+export interface IndexComparison {
+    idA: string;
+    idB: string;
+    weightDiffs: {
+        symbol: string;
+        weightA: number;
+        weightB: number;
+        delta: number;
+    }[];
+    impliedNotionalA: number;
+    impliedNotionalB: number;
+}
+/** SoSoValue official index vs Bloom SSI weight comparison */
+export interface SoSoSsiComparison {
+    sosoIndexId: string;
+    sosoName: string;
+    strategyId: string;
+    strategyName: string;
+    weightDiffs: {
+        symbol: string;
+        weightSoso: number;
+        weightSsi: number;
+        delta: number;
+    }[];
+    impliedNotionalSoso: number;
+    impliedNotionalSsi: number;
+    notionalUSD: number;
 }
 export interface SSIAssetWeight {
     symbol: string;
@@ -54,10 +102,12 @@ export interface SSIAssetWeight {
 }
 export type OrderSide = 1 | 2;
 export type OrderType = 1 | 2;
-export type TimeInForce = 1 | 2 | 3;
+/** 1=GTC, 2=FOK (unsupported), 3=IOC, 4=GTX — market orders must use IOC(3) */
+export type TimeInForce = 1 | 2 | 3 | 4;
 export type PositionSide = 1 | 2;
 export type Modifier = 0 | 1 | 2;
 export interface SpotOrderItem {
+    symbolID: number;
     clOrdID: string;
     side: OrderSide;
     type: OrderType;
@@ -97,6 +147,16 @@ export interface CopyTradeIntent {
     userAddress: string;
     allocationUSD: number;
     maxSlippageBps: number;
+    signalId?: string;
+    deadline?: number;
+    userSignature?: string;
+    /** Execution venue — spot (default) or perps when SODEX_ENABLE_PERPS_COPY=1 */
+    venue?: "spot" | "perps";
+    leverage?: number;
+    /** market (default) or TWAP basket when SODEX_ENABLE_TWAP=1 */
+    executionStyle?: "market" | "twap";
+    /** TWAP window in seconds (60–86400) */
+    twapDurationSec?: number;
 }
 export interface CopyTradeResult {
     intentId: string;
@@ -104,6 +164,53 @@ export interface CopyTradeResult {
     sentinelReason?: string;
     orders: OrderFill[];
     totalExecutedUSD: number;
+    timestamp: string;
+    simulated?: boolean;
+    /** manual MetaMask oneshot vs always-on Auto-Copy grant */
+    source?: "manual" | "auto-copy";
+}
+/** EIP-712 AutoCopyGrant — user authorizes unattended copy within limits until expiresAt */
+export interface AutoCopyGrantMessage {
+    userAddress: string;
+    maxAllocationUSD: number;
+    maxDailyUSD: number;
+    maxSlippageBps: number;
+    venue: "spot" | "perps";
+    expiresAt: number;
+    nonce: number;
+}
+export interface AutoCopySubscription {
+    id: string;
+    userAddress: string;
+    enabled: boolean;
+    maxAllocationUSD: number;
+    maxDailyUSD: number;
+    maxSlippageBps: number;
+    venue: "spot" | "perps";
+    /** Copy every newly minted pipeline strategy */
+    mode: "latest_pipeline";
+    grantSignature: string;
+    grantExpiresAt: number;
+    grantNonce: number;
+    spentTodayUSD: number;
+    spentDayKey: string;
+    lastRunAt: string | null;
+    lastError: string | null;
+    lastStrategyId: string | null;
+    lastResult: "executed" | "blocked" | "skipped" | "error" | null;
+    createdAt: string;
+    updatedAt: string;
+}
+export interface AutoCopyRun {
+    id: string;
+    subscriptionId: string;
+    userAddress: string;
+    strategyId: string;
+    status: "executed" | "blocked" | "skipped" | "error";
+    message: string;
+    allocationUSD: number;
+    executedUSD?: number;
+    tradeId?: string;
     timestamp: string;
 }
 export interface SentinelCheck {
@@ -119,7 +226,7 @@ export interface SentinelReport {
     checks: SentinelCheck[];
     timestamp: string;
 }
-export type WSEventType = "NEWSLETTER_PUBLISHED" | "STRATEGY_CREATED" | "ORDER_SUBMITTED" | "ORDER_FILL" | "SENTINEL_TRIP" | "AGENT_STATUS" | "MARKET_UPDATE";
+export type WSEventType = "NEWSLETTER_PUBLISHED" | "STRATEGY_CREATED" | "STRATEGY_REBALANCED" | "ORDER_SUBMITTED" | "ORDER_FILL" | "SENTINEL_TRIP" | "AGENT_STATUS" | "MARKET_UPDATE" | "OPPORTUNITY_UPDATED" | "SIGNAL_RECORDED";
 export interface WSEvent<T = unknown> {
     type: WSEventType;
     payload: T;
@@ -133,4 +240,84 @@ export interface AgentState {
     lastRun?: string;
     message?: string;
 }
-//# sourceMappingURL=index.d.ts.map
+export interface SignalEvidence {
+    source: string;
+    label: string;
+    value: string | number;
+    module: "sosovalue" | "sodex" | "defillama" | "computed";
+}
+export interface VerifiedSignal {
+    id: string;
+    source: SignalSource;
+    title: string;
+    summary: string;
+    publishedAt: string;
+    narrative?: SmartMoneyNewsletter["narrative"];
+    keyAssets: string[];
+    newsletterId?: string;
+    strategyId?: string;
+    inputDigest: string;
+    contentDigest: string;
+    modelVersion?: string;
+    status: SignalStatus;
+    evidence: SignalEvidence[];
+    score?: number;
+}
+export interface SignalOutcome {
+    signalId: string;
+    tradeId?: string;
+    newsletterId?: string;
+    strategyId: string;
+    userAddress: string;
+    entryNotionalUSD: number;
+    exitNotionalUSD?: number;
+    pnlUSD?: number;
+    pnlBps?: number;
+    horizonHours?: number;
+    resolvedAt?: string;
+    verification: {
+        sentinelPassed: boolean;
+        executionMode: "live" | "simulated";
+        userSignatureHash?: string;
+    };
+}
+export interface LedgerStats {
+    totalSignals: number;
+    openSignals: number;
+    executedSignals: number;
+    blockedSignals: number;
+    resolvedSignals: number;
+    bySource: Record<SignalSource, number>;
+}
+export type OpportunityAction = "copy" | "rebalance" | "watch";
+export interface OpportunitySignal {
+    name: string;
+    score: number;
+    maxScore: number;
+    direction: "bullish" | "bearish" | "neutral";
+    detail: string;
+}
+export interface OpportunityEvidence {
+    module: string;
+    label: string;
+    value: string;
+    available: boolean;
+}
+export interface OpportunityScore {
+    id: string;
+    symbol: string;
+    rank: number;
+    totalScore: number;
+    maxScore: number;
+    direction: "long" | "short" | "neutral";
+    action: OpportunityAction;
+    tradable: boolean;
+    signals: OpportunitySignal[];
+    evidence: OpportunityEvidence[];
+    missingInputs: string[];
+    thesis: string;
+    signalId?: string;
+    strategyId?: string;
+    cachedAt: string;
+    isStale: boolean;
+}
