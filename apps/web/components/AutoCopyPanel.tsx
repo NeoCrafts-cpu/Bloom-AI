@@ -157,7 +157,7 @@ export default function AutoCopyPanel() {
           <div>
             <h2 className="text-sm font-bold text-bloom-text">Auto-Copy</h2>
             <p className="text-[11px] text-bloom-text-muted">
-              Always-on — sign once, copy new SSI baskets when Sentinel passes
+              Unattended copies still use the server SoDEX key. Manual Trade uses your own wallet balance.
             </p>
           </div>
         </div>

@@ -12,52 +12,82 @@ import { config } from "../config.js";
  * 5. Sign EIP-712 typed data with domain { name: "spot"|"futures", version:"1", chainId, verifyingContract: 0x000...0 }
  * 6. Prepend 0x01 byte to signature bytes → typedSig
  */
-export async function buildTypedSignature(
-  payload: { type: string; params: Record<string, unknown> },
-  nonce: number,
-  domainName: "spot" | "futures",
-): Promise<{ typedSig: string; payloadHash: string }> {
-  // Step 1: Compact JSON — JSON.stringify with no spaces
-  const compactJson = JSON.stringify(payload);
+export const EXCHANGE_ACTION_TYPES: Record<string, { name: string; type: string }[]> = {
+  ExchangeAction: [
+    { name: "payloadHash", type: "bytes32" },
+    { name: "nonce", type: "uint64" },
+  ],
+};
 
-  // Step 2: keccak256 of the UTF-8 encoded JSON
-  const payloadBytes = ethers.toUtf8Bytes(compactJson);
-  const payloadHash = ethers.keccak256(payloadBytes);
-
-  // Step 3: EIP-712 domain
-  const domain = {
+export function getExchangeDomain(domainName: "spot" | "futures") {
+  return {
     name: domainName,
     version: "1",
     chainId: config.SODEX_CHAIN_ID,
     verifyingContract: "0x0000000000000000000000000000000000000000" as `0x${string}`,
   };
+}
 
-  // Step 4: Typed data types
-  const types = {
-    ExchangeAction: [
-      { name: "payloadHash", type: "bytes32" },
-      { name: "nonce", type: "uint64" },
-    ],
-  };
+/** Compact JSON + keccak256 — must match Go SDK / MetaMask payloadHash. */
+export function hashExchangePayload(payload: {
+  type: string;
+  params: Record<string, unknown>;
+}): string {
+  return ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(payload)));
+}
 
-  // Step 5: Message
-  const message = {
-    payloadHash,
-    nonce,
-  };
-
-  // Step 6: Sign with private key
-  const wallet = new ethers.Wallet(config.SODEX_API_PRIVATE_KEY);
-  const rawSig = await wallet.signTypedData(domain, types, message);
-
-  // Step 7: Prepend SignatureType 0x01 + 65-byte ECDSA (r ‖ s ‖ v).
-  // ethers returns v as 27/28; SoDEX (go-ethereum SigToPub) requires v as 0/1.
-  // Sending 27/28 yields: "Failed to recover signer: Invalid recovery ID: bad recovery id".
+/**
+ * Convert a standard ECDSA signature (MetaMask / ethers v=27|28) into SoDEX typedSig:
+ * 0x01 ‖ r ‖ s ‖ yParity(0|1)
+ */
+export function normalizeEcdsaToTypedSig(rawSig: string): string {
   const sig = ethers.Signature.from(rawSig);
   const r = sig.r.replace(/^0x/, "").padStart(64, "0");
   const s = sig.s.replace(/^0x/, "").padStart(64, "0");
   const v = (sig.yParity & 1).toString(16).padStart(2, "0");
-  const typedSig = `0x01${r}${s}${v}`;
+  return `0x01${r}${s}${v}`;
+}
+
+/** Verify MetaMask ExchangeAction signature recovers to expected address. */
+export function verifyExchangeActionSignature(args: {
+  domainName: "spot" | "futures";
+  payloadHash: string;
+  nonce: number;
+  signature: string;
+  expectedAddress: string;
+}): { valid: boolean; recovered?: string; error?: string } {
+  try {
+    const recovered = ethers.verifyTypedData(
+      getExchangeDomain(args.domainName),
+      EXCHANGE_ACTION_TYPES,
+      { payloadHash: args.payloadHash, nonce: args.nonce },
+      args.signature,
+    );
+    if (recovered.toLowerCase() !== args.expectedAddress.toLowerCase()) {
+      return {
+        valid: false,
+        recovered,
+        error: `Signer ${recovered} does not match wallet ${args.expectedAddress}`,
+      };
+    }
+    return { valid: true, recovered };
+  } catch (err) {
+    return { valid: false, error: `Invalid SoDEX signature: ${(err as Error).message}` };
+  }
+}
+
+export async function buildTypedSignature(
+  payload: { type: string; params: Record<string, unknown> },
+  nonce: number,
+  domainName: "spot" | "futures",
+): Promise<{ typedSig: string; payloadHash: string }> {
+  const payloadHash = hashExchangePayload(payload);
+  const domain = getExchangeDomain(domainName);
+  const message = { payloadHash, nonce };
+
+  const wallet = new ethers.Wallet(config.SODEX_API_PRIVATE_KEY);
+  const rawSig = await wallet.signTypedData(domain, EXCHANGE_ACTION_TYPES, message);
+  const typedSig = normalizeEcdsaToTypedSig(rawSig);
 
   return { typedSig, payloadHash };
 }

@@ -16,7 +16,8 @@ const WAVES = [
       "SoSoValue ETF/news + SoDEX tickers, klines, orderbook",
       "Pipeline-generated SSI indices (no static seed catalog)",
       "EIP-712 copy-trade on SoDEX testnet with Sentinel risk gate",
-      "Verified Signal Ledger + Opportunity Discovery",
+      "Auto-Copy grants — one signature, fills after the next pipeline",
+      "Verified fills analytics: equity, by-asset / by-strategy PnL",
     ],
   },
   {
@@ -24,10 +25,10 @@ const WAVES = [
     color: "text-bloom-orange",
     dot: "bg-bloom-orange",
     items: [
-      "SoSoValue Index / Macro / Treasuries / Crypto Stocks depth",
+      "Deeper SoSoValue Index / Macro / Treasuries feeds",
       "Alerts for ETF spikes, RSI extremes, opportunity scores",
       "Index Publisher Studio with rebalance history",
-      "Mark-to-market PnL from verified fills",
+      "Richer Auto-Copy vs manual attribution",
     ],
   },
   {
@@ -45,9 +46,9 @@ const WAVES = [
 
 const FEATURES = [
   { icon: Brain,  title: "AI Newsletter",   desc: "SoSoValue ETF flows + sentiment → Smart Money Terminal" },
-  { icon: Layers, title: "Copy Strategies", desc: "Pipeline-generated SSI indices with live SoDEX prices" },
-  { icon: Zap,    title: "Live Execution",  desc: "User-confirmed EIP-712 orders on SoDEX testnet" },
-  { icon: Shield, title: "Risk Sentinel",   desc: "Blocks trades that exceed slippage, size, or daily limits" },
+  { icon: Layers, title: "SSI Strategies",  desc: "Pipeline-minted baskets with live SoDEX prices" },
+  { icon: Zap,    title: "Trade & Auto-Copy", desc: "Manual MetaMask fills or one Auto-Copy grant" },
+  { icon: Shield, title: "Risk Sentinel",   desc: "Gates size, slippage, and daily exposure before Broker" },
 ];
 
 export default function WelcomeModal() {

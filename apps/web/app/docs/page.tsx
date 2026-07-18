@@ -8,7 +8,7 @@ import {
   Brain, Layers, Zap, Shield, ChevronRight, BookOpen,
   Activity, Globe, Lock, ArrowUpRight, CheckCircle,
   Clock, Circle, Rocket, Code2, Cpu, FileText, BarChart3, Wallet,
-  LineChart, TrendingUp,
+  LineChart, TrendingUp, Bot,
 } from "lucide-react";
 
 const ease = [0.25, 0.46, 0.45, 0.94] as const;
@@ -22,7 +22,7 @@ const SECTIONS = [
   { id: "market",         label: "Market Intelligence", icon: BarChart3  },
   { id: "apis",           label: "API Reference",       icon: Code2      },
   { id: "strategies",     label: "Strategies (SSI)",    icon: Layers     },
-  { id: "copy-trade",     label: "Copy Trade & SoDEX",  icon: Zap        },
+  { id: "copy-trade",     label: "Trade & Auto-Copy",   icon: Zap        },
   { id: "sentinel",       label: "Sentinel Risk Guard", icon: Shield     },
   { id: "mcp",            label: "MCP Tool Registry",   icon: Globe      },
   { id: "roadmap",        label: "Roadmap",             icon: Rocket     },
@@ -61,7 +61,7 @@ export default function DocsPage() {
           <div className="mt-8 px-2">
             <div className="pill-badge-orange text-xs">
               <span className="live-dot" />
-              v3.0 — Wave 3
+              Live fills · Auto-Copy
             </div>
           </div>
         </aside>
@@ -174,22 +174,22 @@ function InfoCard({ title, children, icon: Icon }: { title: string; children: Re
 function SectionOverview() {
   return (
     <div>
-      <div className="pill-badge-orange mb-4 w-fit"><span className="live-dot" />Live on SoDEX Testnet</div>
-      <DocH1>Bloom AI — Agentic Financial Media & Execution Network</DocH1>
+      <div className="pill-badge-orange mb-4 w-fit"><span className="live-dot" />Live SoDEX fills · Auto-Copy ready</div>
+      <DocH1>Bloom AI — Research to Live SoDEX Fills</DocH1>
       <DocP>
-        Bloom AI (AFMEN) is a fully agentic system that bridges real-world financial intelligence with on-chain execution.
-        It transforms macro data — ETF fund flows, crypto sentiment, DeFi TVL, order book depth, VC funding rounds — into
-        human-readable Smart Money newsletters, technical analysis briefings, on-chain index strategies, and executed
-        copy-trades on SoDEX — all in a single autonomous loop. No fabricated user-facing metrics: every panel shows
-        live API data, pipeline-generated artifacts, or an explicit empty/stale/unavailable state.
+        Bloom AI is an agentic research-to-execution stack on the SoSoValue ecosystem. Five agents turn ETF flows,
+        sentiment, and SoDEX market data into Smart Money newsletters and pipeline-minted SSI baskets. You review
+        strategies, then trade manually with MetaMask — or sign one Auto-Copy grant so Sentinel-gated fills run after
+        the next pipeline. Performance shows verified fills only: equity curve, by-asset / by-strategy PnL, and
+        Auto-Copy vs manual attribution. No fabricated TVL or win rates.
       </DocP>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         {[
-          { icon: Brain,     title: "5 AI Agents",              desc: "Journalist, Strategist, Broker, Sentinel, and Chart Analyst run autonomously — from raw data ingestion to on-chain execution and technical analysis." },
-          { icon: Layers,    title: "SSI Protocol Native",      desc: "Strategies are minted as on-chain Wrapped Token indices via the SSI Protocol on ValueChain L1." },
-          { icon: Zap,       title: "SoDEX Execution",         desc: "Every copy-trade fires EIP-712 signed orders directly to the SoDEX REST API with Sentinel pre-flight checks." },
-          { icon: BarChart3, title: "8 Live Market Panels",    desc: "OHLCV charts, ETF history, DeFi TVL, L2 order book depth, market heatmap, perps positions, VC funding rounds — all live." },
+          { icon: Brain,     title: "5-Agent Pipeline",         desc: "Journalist → Chart Analyst → Strategist → Sentinel → Broker. Run from Home; strategies stay empty until the pipeline mints them." },
+          { icon: Layers,    title: "SSI Strategies",           desc: "Pipeline-generated baskets with Review → Trade, SoSo index compare, and Studio weight edits — ledger-backed signal trail." },
+          { icon: Bot,       title: "Trade & Auto-Copy",        desc: "Manual EIP-712 batchNewOrder fills on SoDEX testnet, or one AutoCopyGrant signature for unattended copies within your limits." },
+          { icon: BarChart3, title: "MTM Performance",          desc: "Verified session analytics — equity curve, by asset / strategy / day, Auto-Copy tags, mark-to-market from SoDEX prices." },
         ].map((c) => (
           <motion.div key={c.title} whileHover={{ y: -3 }} transition={{ duration: 0.2 }} className="glass-card p-5">
             <div className="flex items-center gap-2 mb-2">
@@ -201,6 +201,12 @@ function SectionOverview() {
         ))}
       </div>
 
+      <DocH2><BookOpen size={18} className="text-bloom-orange" />Product Journey</DocH2>
+      <DocP>
+        The app follows one path: <DocCode>Home</DocCode> → <DocCode>Discover</DocCode> → <DocCode>News</DocCode> →{" "}
+        <DocCode>Strategies</DocCode> → <DocCode>Trade</DocCode> → <DocCode>Results</DocCode>.
+      </DocP>
+
       <DocH2><BookOpen size={18} className="text-bloom-orange" />Quick Start</DocH2>
       <DocP>Clone the monorepo, install deps, configure environment variables, and run both servers:</DocP>
       <DocBlock>{`# 1. Install all workspace deps
@@ -208,7 +214,8 @@ npm install
 
 # 2. Configure environment
 cp apps/api/.env.example apps/api/.env
-# Fill in: SOSOVALUE_API_KEY, SODEX_API_KEY_NAME, SODEX_API_PRIVATE_KEY, OPENROUTER_API_KEY
+# Required for live fills: SOSOVALUE_API_KEY, SODEX_API_PRIVATE_KEY, OPENROUTER_API_KEY
+# Optional: SODEX_API_KEY_NAME (omit for master key)
 
 # 3. Start the API server (port 4000)
 cd apps/api && npx tsx src/index.ts
@@ -219,15 +226,15 @@ cd apps/web && npx next dev --port 3000`}</DocBlock>
       <DocH2><Globe size={18} className="text-bloom-orange" />Pages</DocH2>
       <div className="space-y-2">
         {[
-          { path: "/",           desc: "Landing page — hero, stats, agent showcase, integration stack" },
-          { path: "/dashboard",  desc: "Live AI newsletter feed with SSE updates + agent status bar" },
-          { path: "/terminal",   desc: "Smart Money Terminal — full newsletter reader with strategy links" },
-          { path: "/research",   desc: "Market intelligence — OHLCV charts, Signals, Confluence, Sentiment" },
-          { path: "/strategies", desc: "Pipeline-generated SSI indices — empty until Run Full Pipeline" },
-          { path: "/copy-trade", desc: "4-step wizard — MetaMask → strategy → Sentinel → SoDEX" },
-          { path: "/performance", desc: "Verified session trades only — no fabricated KPIs" },
-          { path: "/roadmap",    desc: "Product roadmap — phases 1–4" },
-          { path: "/docs",       desc: "This documentation page" },
+          { path: "/",            desc: "Landing — live fills, Auto-Copy, journey, agent + integration stack" },
+          { path: "/dashboard",   desc: "Home — run pipeline, live prices, guided next steps" },
+          { path: "/research",    desc: "Discover — charts, L2 book, signals, confluence, opportunities" },
+          { path: "/terminal",    desc: "News — Smart Money newsletters + market context side panels" },
+          { path: "/strategies",  desc: "SSI baskets — Review → Trade, compare, Studio (empty until pipeline)" },
+          { path: "/copy-trade",  desc: "Trade — manual MetaMask wizard + Auto-Copy grant panel" },
+          { path: "/performance", desc: "Results — equity, by-asset / by-strategy MTM, Auto-Copy vs manual" },
+          { path: "/roadmap",     desc: "Phases 1–4 — shipped Auto-Copy + analytics in Phase 2" },
+          { path: "/docs",        desc: "This documentation page" },
         ].map((p) => (
           <div key={p.path} className="flex items-center gap-3 py-2 border-b border-bloom-border last:border-0">
             <DocCode>{p.path}</DocCode>
@@ -259,21 +266,22 @@ function SectionArchitecture() {
 │   │       │   ├── journalist/  # SoSoValue polling + LLM newsletter generation
 │   │       │   ├── chartanalyst/# SoDEX klines → RSI/SMA → TA briefing
 │   │       │   ├── strategist/  # Narrative → SSI portfolio weights (pipeline-generated)
-│   │       │   ├── broker/      # EIP-712 order construction + SoDEX submission
-│   │       │   └── sentinel/    # Deterministic 8-rule circuit breaker
-│   │       ├── lib/
-│   │       │   ├── cache.ts     # In-memory TTL cache (stale-while-revalidate)
-│   │       │   └── sodexParse.ts# SoDEX ticker/klines field normalization
-│   │       ├── mcp/             # MCP tool registry (7 tools)
-│   │       ├── routes/          # REST API route handlers
-│   │       └── services/
-│   │           ├── sosovalue.ts # SoSoValue Terminal API (ETF, news, prices)
-│   │           ├── sodex.ts     # SoDEX REST — tickers, orderbook, account state
-│   │           ├── eip712.ts    # Typed data helpers
-│   │           └── wsManager.ts # In-process WebSocket hub
+│   │       │   ├── broker/      # EIP-712 batchNewOrder + SoDEX submission
+│   │       │   └── sentinel/    # Deterministic risk gates (11+ rules)
+│   │       ├── signing/
+│   │       │   ├── eip712.ts       # DecimalString + yParity helpers
+│   │       │   └── autoCopyAuth.ts # AutoCopyGrant EIP-712 verify
+│   │       ├── store/
+│   │       │   ├── tradeStore.ts     # Fills + MTM performance
+│   │       │   ├── autoCopyStore.ts  # Grants + run history
+│   │       │   └── strategyStore.ts  # Pipeline SSI indices
+│   │       ├── routes/          # REST — market, agents, copy-trade, auto-copy, …
+│   │       ├── services/
+│   │       │   ├── sosovalue.ts # Terminal API (ETF, news, macro, …)
+│   │       │   ├── sodex.ts     # Spot batch, tickers, account, cancel-only skip
+│   │       │   └── autoCopy.ts  # Post-pipeline Auto-Copy runner
+│   │       └── mcp/             # MCP tool registry (7 tools)
 │   └── web/                     # Next.js 15 App Router (port 3000)
-│       ├── app/                 # Pages (layout, page, route)
-│       └── components/          # React client components
 └── packages/
     └── types/                   # Shared TypeScript types`}</DocBlock>
 
@@ -311,12 +319,12 @@ const result = await cache.get("etf-flows", TTL.ETF_FLOWS, fetchFromSoSoValue);
       <DocH2><Activity size={18} className="text-bloom-orange" />Data Flow</DocH2>
       <div className="space-y-3 mb-6">
         {[
-          { step: "0", title: "POST /api/agents/pipeline/trigger",        desc: "Orchestrates the full pipeline: Journalist → Chart Analyst → Strategist → Sentinel preview. Run this from the dashboard before visiting /strategies or /copy-trade." },
-          { step: "1", title: "Journalist polls every 10 min (TTL cached)", desc: "Fetches ETF flows (5min TTL), news sentiment (2min TTL), and market snapshots from SoDEX first, then CoinGecko as fallback (15s TTL) → builds LLM prompt → publishes SmartMoneyNewsletter via OpenRouter (template fallback if key missing)." },
-          { step: "2", title: "Chart Analyst runs on schedule or trigger", desc: "Fetches SoDEX klines (sorted ascending for charts), computes RSI/SMA → publishes TA briefing newsletter. POST /api/agents/chartanalyst/trigger returns the newsletter object directly." },
-          { step: "3", title: "Strategist receives newsletter",            desc: "Derives narrative type (risk-on / risk-off / rotation) → maps to SSI index weights with live SoDEX prices → stores SSIIndex in strategyStore (empty until pipeline runs)." },
-          { step: "4", title: "Sentinel preview + user Copy Trade",         desc: "Pipeline runs sentinel dry-run. User confirms copy-trade → POST /api/broker/execute → Broker resolves accountID + symbolIDs → Sentinel runs 8 checks → EIP-712 signed orders to SoDEX REST." },
-          { step: "5", title: "Order fills + verified performance",       desc: "SoDEX returns fills → tradeStore persists session trades → /performance shows verified stats only (no fabricated win rates or PnL curves)." },
+          { step: "0", title: "POST /api/agents/pipeline/trigger",        desc: "Home runs the full pipeline: Journalist → Chart Analyst → Strategist → Sentinel preview. Then Auto-Copy subscribers (if any) execute against the new strategy." },
+          { step: "1", title: "Journalist polls every 10 min (TTL cached)", desc: "Fetches ETF flows, news sentiment, and market snapshots (SoDEX first, CoinGecko fallback) → LLM newsletter via OpenRouter (template fallback if key missing)." },
+          { step: "2", title: "Chart Analyst runs on schedule or trigger", desc: "SoDEX klines → RSI/SMA → TA briefing. POST /api/agents/chartanalyst/trigger returns the newsletter for Discover Signals." },
+          { step: "3", title: "Strategist mints SSI basket",              desc: "Narrative → live-weighted SSIIndex in strategyStore. Strategies page is empty until this runs." },
+          { step: "4", title: "Trade: manual or Auto-Copy",               desc: "Manual: MetaMask → POST /api/broker/execute (batchNewOrder, cancel-only legs skipped). Auto-Copy: one AutoCopyGrant → fills after the next pipeline within grant limits." },
+          { step: "5", title: "Verified Performance",                    desc: "tradeStore persists fills → GET /api/copy-trade/performance returns equity, byAsset, byStrategy, byDay, Auto-Copy counts, and live MTM marks." },
         ].map((s) => (
           <div key={s.step} className="flex gap-4 glass-card p-4">
             <div className="w-7 h-7 rounded-full bg-bloom-orange flex items-center justify-center shrink-0 text-xs font-bold text-bloom-bg">{s.step}</div>
@@ -333,10 +341,10 @@ const result = await cache.get("etf-flows", TTL.ETF_FLOWS, fetchFromSoSoValue);
         {[
           { layer: "Frontend",    tech: "Next.js 15.5 · App Router · Tailwind CSS · Framer Motion · React Query" },
           { layer: "Backend",     tech: "Fastify 4 · TypeScript ESM · tsx watch · WebSocket · SSE" },
-          { layer: "Blockchain",  tech: "EIP-712 typed data · SoDEX REST API · ValueChain L1 (Testnet 138565)" },
-          { layer: "AI / LLM",   tech: "OpenRouter API · RAG pipeline · Journalist narrative generation" },
-          { layer: "Data",        tech: "SoSoValue Terminal API · CoinGecko · CryptoPanic · DefiLlama" },
-          { layer: "Protocol",    tech: "SSI Protocol · Wrapped Token indices · On-chain rebalancing" },
+          { layer: "Blockchain",  tech: "EIP-712 batchNewOrder · AutoCopyGrant · ValueChain testnet 138565" },
+          { layer: "AI / LLM",   tech: "OpenRouter · Journalist + Chart Analyst with deterministic fallbacks" },
+          { layer: "Data",        tech: "SoSoValue Terminal · SoDEX · CoinGecko · CryptoPanic · DefiLlama" },
+          { layer: "Persistence", tech: "JSON tradeStore + autoCopyStore (Postgres planned for multi-user)" },
         ].map((r) => (
           <div key={r.layer} className="glass-card p-4">
             <p className="text-xs font-semibold text-bloom-orange mb-1">{r.layer}</p>
@@ -403,40 +411,35 @@ function deriveWeights(narrative: string, keyAssets: string[]) {
 }`,
         },
         {
-          icon: Zap, name: "The Broker", role: "Copy-Trade Execution",
+          icon: Zap, name: "The Broker", role: "Live SoDEX Execution",
           color: "rgba(232,97,10,0.12)",
-          desc: "The Broker handles the final execution step. When a user submits a copy-trade intent, the Broker constructs EIP-712 typed data payloads for each asset in the strategy, signs them with the configured private key, and submits them to the SoDEX REST API. It maps strategy assets to SoDEX trading pairs, handles per-asset allocation, and broadcasts ORDER_SUBMITTED and ORDER_FILL events via the WS hub.",
+          desc: "The Broker places real spot batchNewOrder fills on SoDEX testnet. It resolves accountID from the funded SoDEX wallet, strips DecimalString trailing zeros, normalizes ECDSA yParity, skips cancel-only symbols (e.g. ETH on some testnet states), and renormalizes allocation onto tradable pairs. Manual trades go through POST /api/broker/execute; Auto-Copy runs the same path after pipeline strategy mint.",
           details: [
             { k: "Endpoint",    v: "POST /api/broker/execute" },
-            { k: "Signing",     v: "EIP-712 typed data (strict field order, DecimalString)" },
+            { k: "Signing",     v: "EIP-712 batchNewOrder (DecimalString + yParity 0/1)" },
             { k: "Chain IDs",   v: "Testnet: 138565 · Mainnet: 286623" },
-            { k: "Errors",      v: "Propagates SoDEX API errors — no silent mock fills" },
+            { k: "Auto-Copy",   v: "triggerAutoCopyForStrategy after pipeline mint" },
             { k: "Output",      v: "OrderFill[] + simulated flag when credentials missing" },
           ],
-          code: `// EIP-712 order construction
-const domain = { name: "SoDEX", version: "1", chainId: 138565 };
-const order = {
-  clOrdID: nanoid(),
-  symbol:  "BTC-USDT",
-  side:    "Buy",
-  orderQtyDec: "0.001",  // DecimalString — SoDEX spec
-  ...
-};
-const sig = await signTypedData(privateKey, domain, types, order);`,
+          code: `// Spot batch must sign as batchNewOrder (not newOrder)
+// DecimalString: strip trailing zeros · v → yParity 0|1
+// Cancel-only legs skipped; allocation renormalized onto tradable pairs
+const sig = await signTypedData(privateKey, domain, batchNewOrderTypes, batch);`,
         },
         {
           icon: Shield, name: "The Sentinel", role: "Deterministic Risk Guard",
           color: "rgba(245,160,32,0.10)",
-          desc: "The Sentinel is a non-AI, fully deterministic circuit breaker. It runs eight rules against every copy-trade payload before the Broker submits anything to SoDEX. If any rule fails, the trade is blocked and a SentinelReport is returned with the exact rule that triggered. See the Sentinel section for the full rule list.",
+          desc: "The Sentinel is a non-AI circuit breaker. Core rules always run (size, slippage, daily exposure, address, strategy, ATR proxy, loss streak, macro hard gate). Conditional rules cover perps leverage, mainnet confirmation, and TWAP. Any failure blocks the intent before Broker submits to SoDEX.",
           details: [
-            { k: "Rules",       v: "8 deterministic checks — see Sentinel Risk Guard section" },
+            { k: "Rules",       v: "11+ deterministic checks — see Sentinel Risk Guard section" },
             { k: "Endpoint",    v: "POST /api/sentinel/check" },
             { k: "Pipeline",    v: "Dry-run preview during POST /api/agents/pipeline/trigger" },
             { k: "Output",      v: "SentinelReport with per-rule pass/fail" },
           ],
-          code: `// apps/api/src/agents/sentinel/index.ts — 8 rules including:
-// MAX_ORDER_USD, MAX_SLIPPAGE_BPS, MAX_DAILY_USD, POSITIVE_ALLOCATION,
-// VALID_USER_ADDRESS, VALID_STRATEGY_ID, ATR_VOLATILITY_FILTER, CIRCUIT_BREAKER`,
+          code: `// Always-on: MAX_ORDER_USD, MAX_SLIPPAGE_BPS, MAX_DAILY_USD,
+// POSITIVE_ALLOCATION, VALID_USER_ADDRESS, VALID_STRATEGY_ID,
+// ATR_VOLATILITY_FILTER, CIRCUIT_BREAKER, MACRO_EVENT_HARD_GATE
+// Conditional: MAX_LEVERAGE, MAINNET_CONFIRMATION, TWAP_*`,
         },
         {
           icon: LineChart, name: "The Chart Analyst", role: "Technical Analysis — RSI · SMA · Pattern Recognition",
@@ -571,10 +574,16 @@ function SectionAPIs() {
     { method: "GET",  path: "/api/market/perps/symbols",            desc: "SoDEX perps symbol list",                                  res: `{ "data": PerpSymbol[] }` },
     { method: "GET",  path: "/api/market/perps/:address/state",     desc: "SoDEX perps account state — balances, open positions, PnL",res: `{ "data": { balance, positions: Position[] } }` },
     { method: "POST", path: "/api/sentinel/check",                  desc: "Run Sentinel risk checks on a copy-trade intent",           res: `{ "data": SentinelReport }` },
-    { method: "POST", path: "/api/broker/execute",                  desc: "Execute copy-trade after user confirmation — Sentinel + SoDEX orders",        res: `{ "data": CopyTradeResult, "simulated"?: boolean }` },
-    { method: "GET",  path: "/api/copy-trade/performance",          desc: "Verified session trade stats from tradeStore",                               res: `{ "data": { totalTrades, totalNotional, ... } }` },
-    { method: "GET",  path: "/api/copy-trade/audit",                desc: "Sentinel blocks + execution audit log",                                      res: `{ "data": AuditEntry[] }` },
-    { method: "POST", path: "/api/copy-trade/execute",            desc: "Deprecated — returns 410 Gone; use POST /api/broker/execute",                 res: `{ "error": "Use POST /api/broker/execute" }` },
+    { method: "POST", path: "/api/broker/execute",                  desc: "Execute copy-trade — Sentinel + SoDEX batchNewOrder fills", res: `{ "data": CopyTradeResult, "simulated"?: boolean }` },
+    { method: "GET",  path: "/api/copy-trade/history",              desc: "Persisted trade log (newest first)",                       res: `{ "data": TradeRecord[] }` },
+    { method: "GET",  path: "/api/copy-trade/performance",          desc: "Verified MTM analytics — equity, byAsset, byStrategy, Auto-Copy", res: `{ "data": { totalTrades, autoCopyTrades, byAsset, byStrategy, byDay, equityCurve, mtmUpdated, markCache } }` },
+    { method: "GET",  path: "/api/copy-trade/audit",                desc: "Sentinel blocks + execution audit log",                    res: `{ "data": AuditEntry[] }` },
+    { method: "POST", path: "/api/copy-trade/preview",              desc: "Sentinel check without executing",                         res: `{ "data": SentinelReport }` },
+    { method: "POST", path: "/api/copy-trade/execute",              desc: "Deprecated — 410 Gone; use POST /api/broker/execute",      res: `{ "error": "Use POST /api/broker/execute" }` },
+    { method: "POST", path: "/api/auto-copy/enable",                desc: "Enable Auto-Copy with verified EIP-712 AutoCopyGrant",     res: `{ "data": AutoCopySubscription, "message": string }` },
+    { method: "POST", path: "/api/auto-copy/disable",               desc: "Disable Auto-Copy for a wallet",                           res: `{ "data": AutoCopySubscription, "message": string }` },
+    { method: "GET",  path: "/api/auto-copy/:address",              desc: "Subscription + recent Auto-Copy runs",                     res: `{ "data": AutoCopySubscription | null, "runs": AutoCopyRun[] }` },
+    { method: "GET",  path: "/api/auto-copy/:address/runs",         desc: "Full Auto-Copy run history",                               res: `{ "data": AutoCopyRun[] }` },
     { method: "GET",  path: "/api/mcp/tools",                       desc: "List all registered MCP tools",                            res: `{ "data": MCPTool[] }` },
     { method: "POST", path: "/api/mcp/execute",                     desc: "Execute a named MCP tool with input",                      res: `{ "data": any }` },
     { method: "WS",   path: "ws://[host]:4000/ws",                  desc: "WebSocket hub — ORDER_FILL, JOURNALIST_PUBLISHED, SENTINEL_TRIP", res: `{ type: string, payload: any, timestamp: string }` },
@@ -590,8 +599,10 @@ function SectionAPIs() {
     <div>
       <DocH1>API Reference</DocH1>
       <DocP>
-        The Bloom AI API runs on <DocCode>http://localhost:4000</DocCode> (dev) or your deployed Railway/Render URL (production).
-        All REST responses are wrapped in <DocCode>{"{ data: T }"}</DocCode>. Market endpoints include a <DocCode>meta</DocCode> field with <DocCode>cachedAt</DocCode> and <DocCode>isStale</DocCode> for cache transparency.
+        The Bloom AI API runs on <DocCode>http://localhost:4000</DocCode> (dev) or{" "}
+        <DocCode>https://bloom-ai-mqrb.onrender.com</DocCode> (production). All REST responses are wrapped in{" "}
+        <DocCode>{"{ data: T }"}</DocCode>. Market endpoints include a <DocCode>meta</DocCode> field with{" "}
+        <DocCode>cachedAt</DocCode> and <DocCode>isStale</DocCode> for cache transparency.
       </DocP>
 
       <DocH2><Activity size={18} className="text-bloom-orange" />Response Envelope</DocH2>
@@ -665,10 +676,10 @@ function SectionStrategies() {
     <div>
       <DocH1>Strategies & SSI Protocol</DocH1>
       <DocP>
-        Bloom AI strategies are on-chain Wrapped Token indices minted via the SSI Protocol on ValueChain L1.
-        Each strategy is an <DocCode>SSIIndex</DocCode> object that defines a set of assets, their weights,
-        current TVL, and rebalance history. The Strategist agent automatically generates new indices from
-        newsletter narratives.
+        Strategies are pipeline-minted <DocCode>SSIIndex</DocCode> baskets — off-chain today, designed for SSI Protocol
+        on-chain minting on mainnet. Each index defines assets, weights, and rebalance history. On{" "}
+        <DocCode>/strategies</DocCode> you Review a basket, Compare to SoSo indexes, edit weights in Studio, then
+        hand off to Trade. There is no static seed catalog and no fabricated TVL.
       </DocP>
 
       <DocH2><Layers size={18} className="text-bloom-orange" />SSIIndex Type</DocH2>
@@ -717,11 +728,16 @@ function SectionStrategies() {
         </InfoCard>
       ))}
 
-      <DocH2><Lock size={18} className="text-bloom-orange" />Rebalancing</DocH2>
+      <DocH2><Lock size={18} className="text-bloom-orange" />Review → Trade</DocH2>
       <DocP>
-        The Strategist agent triggers a rebalance whenever a new newsletter shifts the dominant narrative.
-        Rebalances update the <DocCode>assets[].weight</DocCode> array and set <DocCode>rebalancedAt</DocCode> to the current timestamp.
-        In Wave 2, this will call the SSI Protocol smart contract directly to execute an on-chain rebalance.
+        After the pipeline mints an index, open Strategies → Review to inspect weights and signal trail, then Trade
+        to open the copy-trade wizard with that strategy pre-selected. Studio edits call{" "}
+        <DocCode>PUT /api/strategies/:id</DocCode> / rebalance endpoints; Compare uses{" "}
+        <DocCode>POST /api/strategies/compare</DocCode>.
+      </DocP>
+      <DocP>
+        Off-chain rebalances update <DocCode>assets[].weight</DocCode> and <DocCode>rebalancedAt</DocCode>. On-chain
+        SSI Protocol minting via SoSoValue Index API remains on the Phase 4 roadmap.
       </DocP>
     </div>
   );
@@ -731,19 +747,19 @@ function SectionStrategies() {
 function SectionCopyTrade() {
   return (
     <div>
-      <DocH1>Copy Trade & SoDEX Integration</DocH1>
+      <DocH1>Trade & Auto-Copy</DocH1>
       <DocP>
-        The copy-trade flow is a 4-step wizard that takes a user from wallet connection to on-chain order fills.
-        Every trade flows through the Sentinel risk check before any order reaches SoDEX.
+        Two execution paths share the same Sentinel + Broker stack. Manual copy-trade is a 4-step MetaMask wizard.
+        Auto-Copy is one EIP-712 grant — then new pipeline strategies fill within your limits without another click.
       </DocP>
 
-      <DocH2><Zap size={18} className="text-bloom-orange" />4-Step Flow</DocH2>
+      <DocH2><Zap size={18} className="text-bloom-orange" />Manual — 4-Step Flow</DocH2>
       <div className="space-y-3 mb-6">
         {[
-          { step: "1 — Connect Wallet", desc: "User connects via wagmi + MetaMask on ValueChain testnet (chainId 138565). Wallet address is required for Sentinel validation." },
-          { step: "2 — Configure Trade", desc: "Select a pipeline-generated strategy, set USD allocation (default $100), configure max slippage in bps (default 50bps = 0.5%)." },
-          { step: "3 — Sentinel Pre-flight", desc: "POST /api/sentinel/check runs 8 deterministic rules. If any fail, trade is blocked with an explanation." },
-          { step: "4 — Execute on SoDEX", desc: "POST /api/broker/execute after explicit user confirmation. Returns OrderFill[] with simulated flag when credentials are missing." },
+          { step: "1 — Connect Wallet", desc: "wagmi + MetaMask on ValueChain testnet (chainId 138565). Broker may resolve accountID from the funded SoDEX wallet if it differs from MetaMask." },
+          { step: "2 — Configure Trade", desc: "Select a pipeline-generated strategy, set USD allocation, max slippage (default 50bps)." },
+          { step: "3 — Sentinel Pre-flight", desc: "POST /api/sentinel/check (or /api/copy-trade/preview). Any failed rule blocks the trade with an explanation." },
+          { step: "4 — Execute on SoDEX", desc: "POST /api/broker/execute after confirmation. Spot batch signs as batchNewOrder; cancel-only legs are skipped. Returns OrderFill[] (simulated if credentials missing)." },
         ].map((s) => (
           <div key={s.step} className="glass-card p-4">
             <p className="text-sm font-semibold text-bloom-orange mb-1">{s.step}</p>
@@ -752,34 +768,55 @@ function SectionCopyTrade() {
         ))}
       </div>
 
-      <DocH2><Code2 size={18} className="text-bloom-orange" />CopyTradeIntent Type</DocH2>
-      <DocBlock>{`interface CopyTradeIntent {
-  walletAddress: string;   // EVM address
-  strategyId:    string;   // e.g. "ssi-mag7-003"
-  allocation:    number;   // USD amount to deploy
-  slippageBps:   number;   // max slippage in basis points (1bps = 0.01%)
-}`}</DocBlock>
-
-      <DocH2><Activity size={18} className="text-bloom-orange" />EIP-712 Order Format</DocH2>
-      <DocP>SoDEX requires strict EIP-712 typed data. The Broker serializes all numeric fields as strings (DecimalString spec):</DocP>
-      <DocBlock>{`// Domain
+      <DocH2><Bot size={18} className="text-bloom-orange" />Auto-Copy Grant</DocH2>
+      <DocP>
+        On Trade, enable Auto-Copy by signing an <DocCode>AutoCopyGrant</DocCode> (EIP-712). The grant stores
+        max allocation, daily USD, slippage, venue, expiry, and nonce. After each successful pipeline strategy mint,
+        the API runs Auto-Copy for active subscribers — each run still passes Sentinel before Broker execution.
+      </DocP>
+      <DocBlock>{`// POST /api/auto-copy/enable
 {
-  name: "SoDEX", version: "1",
-  chainId: 138565,            // testnet (mainnet: 286623)
-  verifyingContract: "0x..."
+  "userAddress": "0x…",
+  "maxAllocationUSD": 100,
+  "maxDailyUSD": 500,
+  "maxSlippageBps": 50,
+  "venue": "spot",
+  "expiresAt": 1719000000,
+  "nonce": 1,
+  "signature": "0x…"   // EIP-712 AutoCopyGrant
 }
 
-// Per-asset order
-{
-  clOrdID:        "nano-id",  // unique client order ID
-  symbol:         "BTC-USDT",
-  side:           "Buy",
-  orderType:      "Market",
-  orderQtyDec:    "0.001",    // DecimalString — NOT a number
-  priceTypeDec:   "0",
-  timeInForce:    "GoodTillCancel",
-  expireTimeSec:  "0"
+// GET /api/auto-copy/:address → subscription + recent runs
+// POST /api/auto-copy/disable  { "userAddress": "0x…" }`}</DocBlock>
+
+      <DocH2><Code2 size={18} className="text-bloom-orange" />CopyTradeIntent Type</DocH2>
+      <DocBlock>{`interface CopyTradeIntent {
+  userAddress:    string;   // EVM address
+  strategyId:     string;   // e.g. "ssi-mag7-003"
+  allocationUSD:  number;   // USD amount to deploy
+  maxSlippageBps: number;   // max slippage in basis points
+  venue?:         "spot" | "perps";
+  // optional: leverage, executionStyle, twapDurationSec, userSignature
 }`}</DocBlock>
+
+      <DocH2><Activity size={18} className="text-bloom-orange" />EIP-712 / SoDEX Signing Notes</DocH2>
+      <DocP>
+        Spot batches must use the <DocCode>batchNewOrder</DocCode> type (not <DocCode>newOrder</DocCode>). Numeric
+        fields are DecimalStrings with trailing zeros stripped. ECDSA <DocCode>v</DocCode> is normalized to yParity
+        0/1. Symbols in cancel-only mode are skipped and allocation renormalized.
+      </DocP>
+      <DocBlock>{`// Domain — ValueChain testnet
+{ name: "SoDEX", version: "1", chainId: 138565, verifyingContract: "0x…" }
+
+// Live fills require SODEX_API_PRIVATE_KEY on the API.
+// Master keys typically omit X-API-Key; named keys set SODEX_API_KEY_NAME.`}</DocBlock>
+
+      <DocH2><BarChart3 size={18} className="text-bloom-orange" />Performance</DocH2>
+      <DocP>
+        <DocCode>GET /api/copy-trade/performance</DocCode> returns verified session stats only — total trades,
+        Auto-Copy count, byAsset / byStrategy / byDay breakdowns, equityCurve, and live mark-to-market updates.
+        The Performance page never invents win rates or PnL.
+      </DocP>
     </div>
   );
 }
@@ -795,21 +832,45 @@ function SectionSentinel() {
         predictable, and safe to operate in a production environment.
       </DocP>
 
-      <DocH2><Shield size={18} className="text-bloom-orange" />The 8 Rules</DocH2>
+      <DocH2><Shield size={18} className="text-bloom-orange" />Always-On Rules</DocH2>
       <div className="space-y-2 mb-6">
         {[
-          { id: "MAX_ORDER_USD",        rule: "allocationUSD ≤ $1,000",         desc: "Hard cap per single order. Prevents accidental fat-finger positions." },
-          { id: "MAX_SLIPPAGE_BPS",     rule: "maxSlippageBps ≤ 100bps",        desc: "Maximum 1% slippage tolerance. Protects against thin-liquidity front-running." },
-          { id: "MAX_DAILY_USD",        rule: "dailySpend + order ≤ $5,000",    desc: "Per-user daily exposure limit. Resets at UTC midnight. Backed by in-memory Map (Redis in production)." },
-          { id: "POSITIVE_ALLOCATION",  rule: "allocationUSD > 0",              desc: "Allocation must be a positive number. Prevents zero-value phantom orders." },
-          { id: "VALID_USER_ADDRESS",   rule: "/^0x[0-9a-fA-F]{40}$/.test(…)",  desc: "Wallet must be a valid EVM address (0x prefix + 40 hex chars)." },
-          { id: "VALID_STRATEGY_ID",    rule: "strategyId.length > 0",          desc: "Strategy ID must be non-empty. Prevents routing to undefined indices." },
-          { id: "ATR_VOLATILITY_FILTER",rule: "maxSlippageBps ≤ 1500bps",       desc: "ATR proxy check — if the user requests >15% slippage tolerance, the environment is high-volatility. Trade blocked until conditions normalise." },
-          { id: "CIRCUIT_BREAKER",      rule: "lossStreak < 3",                 desc: "Consecutive-loss circuit breaker. After 3 successive trade losses, all further trades from that address are blocked pending manual review. Streak resets on a clean Sentinel pass." },
+          { id: "MAX_ORDER_USD",         rule: "allocationUSD ≤ SENTINEL_MAX_ORDER_USD", desc: "Hard cap per single order. Prevents accidental fat-finger positions." },
+          { id: "MAX_SLIPPAGE_BPS",      rule: "maxSlippageBps ≤ SENTINEL_MAX_SLIPPAGE_BPS", desc: "Caps slippage tolerance against thin-liquidity / front-running risk." },
+          { id: "MAX_DAILY_USD",         rule: "dailySpend + order ≤ SENTINEL_MAX_DAILY_USD", desc: "Per-user daily exposure limit. In-memory Map today; Redis/Postgres planned." },
+          { id: "POSITIVE_ALLOCATION",   rule: "allocationUSD > 0",              desc: "Allocation must be a positive number." },
+          { id: "VALID_USER_ADDRESS",    rule: "/^0x[0-9a-fA-F]{40}$/",          desc: "Wallet must be a valid EVM address." },
+          { id: "VALID_STRATEGY_ID",     rule: "strategyId.length > 0",          desc: "Strategy ID must be non-empty." },
+          { id: "ATR_VOLATILITY_FILTER", rule: "maxSlippageBps ≤ ATR threshold", desc: "High slippage tolerance is treated as a high-volatility regime proxy — trade blocked." },
+          { id: "CIRCUIT_BREAKER",       rule: "lossStreak < max consecutive",   desc: "After N successive losses, further trades from that address are blocked until reset." },
+          { id: "MACRO_EVENT_HARD_GATE", rule: "no high-importance event ±Nh",   desc: "SoSoValue macro calendar hard gate — blocks near high-importance events." },
         ].map((r) => (
           <div key={r.id} className="glass-card p-4 flex gap-4">
             <div className="shrink-0">
               <CheckCircle size={16} className="text-emerald-400 mt-0.5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <DocCode>{r.id}</DocCode>
+                <code className="text-xs text-bloom-text-muted font-mono">{r.rule}</code>
+              </div>
+              <p className="text-xs text-bloom-text-muted">{r.desc}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <DocH2><Shield size={18} className="text-bloom-orange" />Conditional Rules</DocH2>
+      <div className="space-y-2 mb-6">
+        {[
+          { id: "MAX_LEVERAGE",          rule: "leverage ≤ SENTINEL_MAX_LEVERAGE", desc: "Perps venue only — also requires SODEX_ENABLE_PERPS_COPY." },
+          { id: "MAINNET_CONFIRMATION",  rule: "userSignature present",           desc: "Mainnet network only — requires wallet EIP-712 confirmation." },
+          { id: "TWAP_ENABLED",          rule: "SODEX_ENABLE_TWAP=1",              desc: "When executionStyle is twap." },
+          { id: "TWAP_DURATION",         rule: "60–86400 seconds",                 desc: "TWAP duration bounds when twap is selected." },
+        ].map((r) => (
+          <div key={r.id} className="glass-card p-4 flex gap-4">
+            <div className="shrink-0">
+              <Clock size={16} className="text-bloom-orange mt-0.5" />
             </div>
             <div>
               <div className="flex items-center gap-2 mb-1">
@@ -838,10 +899,9 @@ function SectionSentinel() {
 
       <InfoCard title="Design Philosophy" icon={Shield}>
         <DocP>
-          AI agents are powerful but non-deterministic. The Sentinel exists precisely because risk guardrails
-          should never be probabilistic. A circuit breaker that "usually" catches dangerous trades is not a
-          circuit breaker. The 8 rules are hardcoded constants — if you want to change a limit, you change
-          the code, commit, and deploy. This creates an audit trail.
+          AI agents are powerful but non-deterministic. The Sentinel exists because risk guardrails should never
+          be probabilistic. Limits are env-backed constants — change them in config, commit, and deploy. Manual
+          trades and Auto-Copy both pass through the same gate before Broker can fire.
         </DocP>
       </InfoCard>
     </div>
@@ -985,72 +1045,72 @@ function SectionRoadmap() {
       <div className="pill-badge-orange mb-4 w-fit"><span className="live-dot" />Active Development</div>
       <DocH1>Roadmap</DocH1>
       <DocP>
-        Bloom AI is being built across three waves for the SoSoValue Buildathon 2026.
-        Wave 1 and Wave 2 (buildathon hardening) are complete. Wave 3 covers mainnet and ecosystem expansion.
+        Bloom AI ships for the SoSoValue Buildathon 2026 across four phases. Phases 1–2 are complete (including
+        live SoDEX fills, Auto-Copy, and MTM analytics). Phase 3 deepens intelligence; Phase 4 is mainnet.
       </DocP>
 
       {[
         {
-          wave: "Wave 1",
-          title: "Demo-Ready Foundation",
+          wave: "Phase 1",
+          title: "Foundation & Agent Pipeline",
           subtitle: "Complete",
           status: "complete" as const,
-          date: "May 2026",
+          date: "2026",
           color: "emerald",
           items: [
-            { done: true,  text: "Monorepo scaffolding (Next.js 15 + Fastify 4 + shared types)" },
-            { done: true,  text: "Five-agent pipeline with WebSocket hub + SSE newsletter stream" },
-            { done: true,  text: "Dashboard, Terminal, Research, Strategies, Copy Trade, Performance pages" },
-            { done: true,  text: "Journalist — SoSoValue polling + OpenRouter LLM" },
-            { done: true,  text: "Chart Analyst — SoDEX klines, RSI/SMA, TA briefing" },
-            { done: true,  text: "Strategist — narrative → SSI portfolio weights" },
-            { done: true,  text: "Broker — EIP-712 signed SoDEX orders" },
-            { done: true,  text: "Sentinel — 8-rule deterministic circuit breaker" },
+            { done: true,  text: "Monorepo — Next.js 15 + Fastify 4 + shared types" },
+            { done: true,  text: "Five-agent pipeline with WebSocket hub + SSE" },
+            { done: true,  text: "Home / Discover / News / Strategies / Trade / Performance" },
+            { done: true,  text: "Journalist, Chart Analyst, Strategist, Sentinel, Broker" },
+            { done: true,  text: "EIP-712 copy-trade on ValueChain testnet (138565)" },
             { done: true,  text: "MCP tool registry (7 tools)" },
-            { done: true,  text: "wagmi wallet connect on ValueChain testnet" },
-            { done: true,  text: "Docs page with full API reference and roadmap" },
+            { done: true,  text: "Docs + DEMO.md verification checklist" },
           ],
         },
         {
-          wave: "Wave 2",
-          title: "Buildathon Hardening & Live Integration",
+          wave: "Phase 2",
+          title: "Live Production Hardening",
           subtitle: "Complete",
           status: "complete" as const,
-          date: "Jun 2026",
+          date: "2026",
           color: "emerald",
           items: [
-            { done: true,  text: "SoDEX API parsing fix — lastPx, object klines, time normalization" },
-            { done: true,  text: "POST /api/agents/pipeline/trigger — full orchestrated pipeline" },
-            { done: true,  text: "Removed static strategy catalog and fabricated performance metrics" },
-            { done: true,  text: "Live SoSoValue + SoDEX health probes on /health" },
-            { done: true,  text: "Chart Analyst trigger returns newsletter content to Signals tab" },
-            { done: true,  text: "Price meta.source — explicit sodex/coingecko/seed labeling" },
-            { done: true,  text: "AgentStatusBar polls live pipeline progress" },
-            { done: true,  text: "Smoke tests + DEMO.md verification checklist" },
-            { done: true,  text: "Copy-trade audit trail + verified session performance" },
-            { done: false, text: "SSI Protocol on-chain index minting via SoSoValue Index API" },
-            { done: false, text: "Real nonce management for production EIP-712 signing" },
-            { done: false, text: "Sentinel daily exposure reset (UTC midnight cron)" },
+            { done: true,  text: "Pipeline-only SSI strategies — no static seed catalog" },
+            { done: true,  text: "SoDEX signing — DecimalString, yParity, batchNewOrder, cancel-only skip" },
+            { done: true,  text: "Auto-Copy grants — one signature, fills after next pipeline" },
+            { done: true,  text: "Performance — equity, by-asset / by-strategy, Auto-Copy vs manual" },
+            { done: true,  text: "Guided journey + Sentinel macro hard gate" },
+            { done: true,  text: "Live health probes + audit trail" },
+            { done: false, text: "Postgres persistence for trades / Auto-Copy across redeploys" },
           ],
         },
         {
-          wave: "Wave 3",
-          title: "Mainnet & Ecosystem Expansion",
+          wave: "Phase 3",
+          title: "Intelligence & Discovery",
+          subtitle: "In Progress",
+          status: "active" as const,
+          date: "2026",
+          color: "orange",
+          items: [
+            { done: true,  text: "Opportunity Discovery + Verified Signal Ledger (shipped surfaces)" },
+            { done: true,  text: "Index Publisher Studio + confluence signals" },
+            { done: false, text: "Deeper Auto-Copy attribution and social copy profiles" },
+            { done: false, text: "Richer alert system — RSI, ETF spikes, opportunity scores" },
+          ],
+        },
+        {
+          wave: "Phase 4",
+          title: "Mainnet & Ecosystem",
           subtitle: "Planned",
           status: "planned" as const,
           date: "Q4 2026",
           color: "blue",
           items: [
-            { done: false, text: "SoDEX Mainnet deployment (chainId 286623) with real assets" },
-            { done: false, text: "Opportunity Discovery Engine — ETF + sentiment + TA scoring" },
-            { done: false, text: "Verified Signal Ledger — evidence → thesis → execution → outcome" },
-            { done: false, text: "On-chain strategy marketplace — permissionless index creation" },
-            { done: false, text: "Social layer — follow strategists, copy their indices" },
-            { done: false, text: "Perpetual futures support on SoDEX" },
+            { done: false, text: "SoDEX Mainnet (chainId 286623) with real assets" },
+            { done: false, text: "SSI Protocol on-chain index minting" },
+            { done: false, text: "Social copy profiles + subscriber leaderboard" },
+            { done: false, text: "Perps copy-trade with leverage caps" },
             { done: false, text: "DAO governance for Sentinel rule changes" },
-            { done: false, text: "Mobile app (React Native)" },
-            { done: false, text: "Institutional API tier — dedicated endpoints, higher rate limits" },
-            { done: false, text: "Automated audit trails — all Sentinel decisions on-chain" },
           ],
         },
       ].map((wave) => {
@@ -1059,6 +1119,9 @@ function SectionRoadmap() {
           active:   { badge: "bg-bloom-orange-dim border-bloom-border-hover text-bloom-orange", dot: "bg-bloom-orange animate-pulse", line: "bg-bloom-orange/30" },
           planned:  { badge: "bg-white/5 border-bloom-border text-bloom-text-muted", dot: "bg-bloom-text-muted/30", line: "bg-white/10" },
         }[wave.status];
+
+        const statusText =
+          wave.status === "complete" ? "✓ Complete" : wave.status === "active" ? "● In Progress" : "◎ Planned";
 
         return (
           <div key={wave.wave} className="mb-10">
@@ -1070,7 +1133,7 @@ function SectionRoadmap() {
               <div className="flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <span className={`text-xs font-semibold px-2.5 py-0.5 rounded-full border ${statusClasses.badge}`}>
-                    {wave.status === "complete" ? "✓ Complete" : "◎ Planned"}
+                    {statusText}
                   </span>
                   <span className="text-xs text-bloom-text-muted">{wave.date}</span>
                 </div>
@@ -1108,15 +1171,15 @@ function SectionRoadmap() {
           Built to <span className="orange-gradient-text">Win</span>
         </h3>
         <p className="text-bloom-text-muted text-sm max-w-lg mx-auto mb-6">
-          Bloom AI is a full-stack, production-architecture demo that integrates every SoSoValue product layer —
-          Terminal API, SSI Protocol, and SoDEX — into a single agentic system.
+          Full-stack research-to-execution on SoSoValue — Terminal API, SSI baskets, and live SoDEX fills with
+          Auto-Copy and verified MTM analytics.
         </p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
           <Link href="/dashboard" className="orange-btn flex items-center justify-center gap-2 px-8 py-2.5 text-sm">
-            Open Terminal <ArrowUpRight size={14} />
+            Open App <ArrowUpRight size={14} />
           </Link>
           <Link href="/copy-trade" className="orange-btn-outline flex items-center justify-center gap-2 px-8 py-2.5 text-sm">
-            Try Copy Trade <Wallet size={14} />
+            Trade & Auto-Copy <Wallet size={14} />
           </Link>
         </div>
       </div>

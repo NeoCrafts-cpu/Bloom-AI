@@ -5,9 +5,9 @@ import Image from "next/image";
 import { motion } from "framer-motion";
 import { useRef } from "react";
 import {
-  ArrowUpRight, Zap, Shield, TrendingUp, Brain, Layers,
-  ChevronRight, Activity, Globe, Lock, LineChart, BarChart3,
-  BookOpen, Newspaper, Copy, Search, Cpu,
+  ArrowUpRight, Zap, Shield, Brain, Layers,
+  ChevronRight, Activity, LineChart, BarChart3,
+  Newspaper, Cpu, Bot,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import LandingNavbar from "@/components/LandingNavbar";
@@ -75,7 +75,7 @@ export default function HomePage() {
               className="pill-badge-orange mb-7"
             >
               <span className="live-dot" />
-              LIVE ON SODEX TESTNET · SOSOVALUE BUILDATHON 2026
+              LIVE FILLS ON SODEX TESTNET · AUTO-COPY READY
             </motion.div>
 
             <motion.h1
@@ -84,9 +84,12 @@ export default function HomePage() {
               transition={{ duration: 0.65, delay: 0.25, ease }}
               className="text-5xl md:text-7xl font-bold leading-[1.05] tracking-tight mb-6"
             >
-              <span className="text-bloom-text">The Agentic</span>
+              <span className="text-bloom-text">Bloom</span>
+              <span className="orange-gradient-text"> AI</span>
               <br />
-              <span className="orange-gradient-text">Finance OS</span>
+              <span className="text-bloom-text text-4xl md:text-5xl font-semibold tracking-tight">
+                Research to live SoDEX fills
+              </span>
             </motion.h1>
 
             <motion.p
@@ -95,8 +98,8 @@ export default function HomePage() {
               transition={{ duration: 0.65, delay: 0.4, ease }}
               className="text-bloom-text-muted text-lg md:text-xl max-w-lg mb-10 leading-relaxed"
             >
-              Five AI agents — Journalist, Strategist, Broker, Sentinel, and Chart Analyst —
-              transforming SoSoValue market intelligence into signed, on-chain trades on SoDEX.
+              Discover → Strategies → Trade → Results. Five agents mint SSI baskets from SoSoValue data,
+              Sentinel gates risk, and the Broker places real EIP-712 batch orders — or Auto-Copy runs after one grant.
             </motion.p>
 
             <motion.div
@@ -109,8 +112,8 @@ export default function HomePage() {
                 <Zap size={18} />
                 Open App
               </Link>
-              <Link href="/research" className="orange-btn-outline flex items-center gap-2 text-base px-8 py-3">
-                Discover signals
+              <Link href="/copy-trade" className="orange-btn-outline flex items-center gap-2 text-base px-8 py-3">
+                Trade & Auto-Copy
                 <ArrowUpRight size={18} />
               </Link>
             </motion.div>
@@ -148,16 +151,16 @@ export default function HomePage() {
               transition={{ duration: 0.5, delay: 0.8, ease }}
               className="flex items-center gap-3 mt-5 flex-wrap"
             >
-              <Link href="/docs#mcp" className="flex items-center gap-2 glass-card px-3 py-1.5 hover:border-bloom-border-hover transition-colors group">
+              <Link href="/performance" className="flex items-center gap-2 glass-card px-3 py-1.5 hover:border-bloom-border-hover transition-colors group">
                 <div className="w-5 h-5 rounded bg-bloom-orange-dim border border-bloom-border-hover flex items-center justify-center">
-                  <Cpu size={10} className="text-bloom-orange" />
+                  <BarChart3 size={10} className="text-bloom-orange" />
                 </div>
-                <span className="text-[11px] font-semibold text-bloom-text group-hover:text-bloom-orange transition-colors">MCP Server · 7 tools</span>
-                <span className="text-[9px] text-bloom-text-muted font-mono">Claude · Cursor · VS Code</span>
+                <span className="text-[11px] font-semibold text-bloom-text group-hover:text-bloom-orange transition-colors">MTM analytics</span>
+                <span className="text-[9px] text-bloom-text-muted font-mono">equity · by asset</span>
               </Link>
-              <Link href="/docs" className="flex items-center gap-1.5 glass-card px-3 py-1.5 hover:border-bloom-border-hover transition-colors group">
-                <Globe size={10} className="text-bloom-text-muted group-hover:text-bloom-orange transition-colors" />
-                <span className="text-[11px] text-bloom-text-muted group-hover:text-bloom-text transition-colors font-semibold">19 SoSoValue endpoints</span>
+              <Link href="/docs#mcp" className="flex items-center gap-1.5 glass-card px-3 py-1.5 hover:border-bloom-border-hover transition-colors group">
+                <Cpu size={10} className="text-bloom-text-muted group-hover:text-bloom-orange transition-colors" />
+                <span className="text-[11px] text-bloom-text-muted group-hover:text-bloom-text transition-colors font-semibold">MCP · agent tools</span>
               </Link>
             </motion.div>
           </div>
@@ -206,13 +209,13 @@ export default function HomePage() {
               </RevealItem>
               <RevealItem>
                 <h2 className="text-4xl md:text-5xl font-bold text-bloom-text mb-4">
-                  Everything in{" "}
-                  <span className="orange-gradient-text">One Terminal</span>
+                  One journey —{" "}
+                  <span className="orange-gradient-text">live today</span>
                 </h2>
               </RevealItem>
               <RevealItem>
                 <p className="text-bloom-text-muted text-lg max-w-xl mx-auto">
-                  From technical chart research to AI-authored newsletters to on-chain copy trading — all connected.
+                  Guided Home, Discover workspace, pipeline SSI strategies, manual or Auto-Copy execution, and verified Performance.
                 </p>
               </RevealItem>
             </RevealStagger>
@@ -369,22 +372,22 @@ export default function HomePage() {
               >
                 <div className="pill-badge-orange mx-auto mb-6 w-fit">
                   <span className="live-dot" />
-                  Live on SoDEX Testnet
+                  Live SoDEX fills · Auto-Copy grants
                 </div>
                 <h2 className="text-4xl font-bold text-bloom-text mb-4">
-                  Start Your{" "}
-                  <span className="orange-gradient-text">One-Person Empire</span>
+                  Run the pipeline.{" "}
+                  <span className="orange-gradient-text">Trade or Auto-Copy.</span>
                 </h2>
                 <p className="text-bloom-text-muted mb-8 max-w-lg mx-auto">
-                  Connect your wallet, subscribe to an AI-generated strategy, and let Bloom AI execute — from newsletter to on-chain fill in seconds.
+                  Open the app, mint an SSI basket, execute with MetaMask — or sign one Auto-Copy grant and let Sentinel-gated fills land on the next pipeline run.
                 </p>
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-                  <Link href="/research" className="orange-btn flex items-center gap-2 text-base px-10 py-3 w-full sm:w-auto justify-center">
-                    Open Research
-                    <LineChart size={18} />
+                  <Link href="/dashboard" className="orange-btn flex items-center gap-2 text-base px-10 py-3 w-full sm:w-auto justify-center">
+                    Open App
+                    <Zap size={18} />
                   </Link>
-                  <Link href="/strategies" className="orange-btn-outline flex items-center gap-2 text-base px-10 py-3 w-full sm:w-auto justify-center">
-                    Browse Strategies
+                  <Link href="/copy-trade" className="orange-btn-outline flex items-center gap-2 text-base px-10 py-3 w-full sm:w-auto justify-center">
+                    Enable Auto-Copy
                     <ChevronRight size={16} />
                   </Link>
                 </div>
@@ -405,13 +408,15 @@ export default function HomePage() {
               <span className="w-1.5 h-1.5 rounded-full bg-bloom-orange animate-pulse" />
               <span className="text-bloom-orange font-medium">Powered by SoSoValue</span>
             </div>
-            <div className="flex items-center gap-5">
+            <div className="flex items-center gap-5 flex-wrap justify-center">
               {[
-                { label: "Research",   href: "/research"   },
-                { label: "Terminal",   href: "/terminal"   },
+                { label: "Home", href: "/dashboard" },
+                { label: "Discover", href: "/research" },
+                { label: "News", href: "/terminal" },
                 { label: "Strategies", href: "/strategies" },
-                { label: "Copy Trade", href: "/copy-trade" },
-                { label: "Docs",       href: "/docs"       },
+                { label: "Trade", href: "/copy-trade" },
+                { label: "Performance", href: "/performance" },
+                { label: "Docs", href: "/docs" },
               ].map(({ label, href }) => (
                 <Link key={label} href={href} className="hover:text-bloom-text transition-colors duration-200">
                   {label}
@@ -436,54 +441,54 @@ const PIPELINE = [
 ];
 
 const STATS = [
-  { label: "Total TVL",             value: 248,   prefix: "$", suffix: "M+" },
-  { label: "Newsletters Published", value: 1420,  suffix: "+"               },
-  { label: "Strategies On-Chain",   value: 87,    suffix: "+"               },
-  { label: "Trades Executed",       value: 24300, suffix: "+"               },
+  { label: "AI Agents in the Pipeline", value: 5, prefix: "", suffix: "" },
+  { label: "Steps: Discover → Results", value: 4, prefix: "", suffix: "" },
+  { label: "Sentinel Risk Checks", value: 11, prefix: "", suffix: "+" },
+  { label: "App Surfaces Live", value: 6, prefix: "", suffix: "" },
 ];
 
 const CAPABILITIES = [
   {
-    title: "Research",
+    title: "Home · Guided start",
+    href: "/dashboard",
+    icon: Zap,
+    description: "Run the full agent pipeline, see live prices & ETF context, then jump Discover → Strategies → Trade → Results.",
+    tags: ["Pipeline", "Journey", "Live prices"],
+  },
+  {
+    title: "Discover",
     href: "/research",
     icon: LineChart,
-    description: "Professional chart view with AI signals, orderbook depth, confluence indicators, and SoSoValue news sentiment — all in one page.",
-    tags: ["Chart", "Signals", "Orderbook", "Confluence", "Sentiment"],
+    description: "SoDEX charts & L2 book, AI signals, confluence, sentiment, institutional flows, and opportunity feed in one workspace.",
+    tags: ["Charts", "Signals", "Orderbook", "Opportunities"],
   },
   {
-    title: "Smart Money Terminal",
+    title: "News Terminal",
     href: "/terminal",
     icon: Newspaper,
-    description: "AI-authored macro newsletters, ETF fund flows, DeFi TVL, perpetuals positions, and live market heatmap.",
-    tags: ["ETF Flows", "DeFi TVL", "Perps", "Heatmap"],
-  },
-  {
-    title: "Copy Trade",
-    href: "/copy-trade",
-    icon: Copy,
-    description: "One-click copy trading: Sentinel risk checks, EIP-712 signing, and direct on-chain execution on SoDEX Testnet.",
-    tags: ["EIP-712", "SoDEX", "ValueChain L1"],
+    description: "Smart Money newsletters from SoSoValue — ETF flows, narratives, and side panels for market context.",
+    tags: ["Newsletters", "ETF", "SoSoValue"],
   },
   {
     title: "Strategies (SSI)",
     href: "/strategies",
     icon: Layers,
-    description: "Browse AI-curated on-chain index strategies (RWA, DeFi, MAG7) minted via the SSI Protocol.",
-    tags: ["SSI Protocol", "Indices", "On-Chain"],
+    description: "Pipeline-minted SSI baskets with Review → Trade. Compare to SoSo indexes and open Studio to edit weights.",
+    tags: ["SSI", "Compare", "Studio"],
   },
   {
-    title: "Market Dashboard",
-    href: "/dashboard",
+    title: "Trade · Auto-Copy",
+    href: "/copy-trade",
+    icon: Bot,
+    description: "Manual MetaMask copy-trade or sign one Auto-Copy grant. Sentinel + real SoDEX batchNewOrder fills; cancel-only legs skipped.",
+    tags: ["Auto-Copy", "EIP-712", "batchNewOrder"],
+  },
+  {
+    title: "Performance",
+    href: "/performance",
     icon: BarChart3,
-    description: "Live market overview with price cards, ETF flow tables, market narratives, and newsletter summaries.",
-    tags: ["Prices", "ETF", "Narratives"],
-  },
-  {
-    title: "Documentation",
-    href: "/docs",
-    icon: BookOpen,
-    description: "Full API reference, agent architecture docs, market intelligence panel guides, and endpoint documentation.",
-    tags: ["API Docs", "Architecture", "Endpoints"],
+    description: "Verified session analytics — equity curve, by-asset / by-strategy PnL, Auto-Copy vs manual, mark-to-market from SoDEX.",
+    tags: ["MTM", "Equity", "By asset"],
   },
 ];
 
@@ -494,8 +499,8 @@ const AGENTS = [
     icon: Brain,
     bg: "rgba(232,97,10,0.12)",
     description:
-      "Continuously polls the SoSoValue Terminal API for ETF net inflows/outflows, AI news sentiment, and category momentum. Synthesizes complex quantitative data into human-readable Smart Money newsletters via a RAG pipeline.",
-    tags: ["SoSoValue Terminal API", "CoinGecko", "CryptoPanic", "LLM RAG"],
+      "Polls SoSoValue for ETF flows, news sentiment, and macro context, then publishes Smart Money newsletters that seed the rest of the pipeline.",
+    tags: ["SoSoValue API", "ETF Flows", "Newsletters", "Macro calendar"],
   },
   {
     name: "The Chart Analyst",
@@ -503,26 +508,26 @@ const AGENTS = [
     icon: LineChart,
     bg: "rgba(245,160,32,0.10)",
     description:
-      "Fetches OHLCV klines from SoDEX for BTC, ETH, and SOL, computes RSI, SMA, and trend signals, then generates LLM-powered commentary for the Research page Signals tab.",
-    tags: ["SoDEX Klines", "RSI", "SMA", "LLM Commentary"],
+      "Reads SoDEX klines, computes RSI/SMA/trend confluence, and publishes signals for Discover — with deterministic TA fallback if the LLM is offline.",
+    tags: ["SoDEX Klines", "RSI", "SMA", "Discover Signals"],
   },
   {
     name: "The Strategist",
-    role: "Portfolio Generation",
+    role: "SSI Basket Generation",
     icon: Layers,
     bg: "rgba(232,97,10,0.10)",
     description:
-      "Receives Journalist insights and translates them into actionable on-chain portfolios. Interfaces with the SSI Protocol to mint bespoke Wrapped Token indices tracking the prevailing macro narrative with optimal weights.",
-    tags: ["SSI Protocol", "Index Minting", "Portfolio Weights", "DefiLlama"],
+      "Turns narrative + market context into live-weighted SSI strategies you can review, compare to SoSo indexes, and send straight to Trade.",
+    tags: ["SSI baskets", "Weights", "SoSo compare", "Studio"],
   },
   {
     name: "The Broker",
-    role: "Copy-Trade Execution",
+    role: "Live SoDEX Execution",
     icon: Zap,
     bg: "rgba(232,97,10,0.12)",
     description:
-      "When a user clicks Copy Strategy, the Broker constructs EIP-712 signed order payloads per the exact SoDEX spec — strict field order, DecimalString serialization, compact JSON — then submits to ValueChain.",
-    tags: ["SoDEX REST API", "EIP-712", "ValueChain L1", "WebSocket"],
+      "Places real spot batchNewOrder fills on SoDEX testnet — DecimalString-safe funds, yParity signatures, cancel-only skip, and Auto-Copy after pipeline.",
+    tags: ["batchNewOrder", "EIP-712", "Auto-Copy", "Live fills"],
   },
   {
     name: "The Sentinel",
@@ -530,8 +535,8 @@ const AGENTS = [
     icon: Shield,
     bg: "rgba(245,160,32,0.10)",
     description:
-      "A hardcoded, non-AI circuit breaker between the Broker and the blockchain. Verifies every payload against max slippage, quantity caps, daily exposure limits, and whitelisted contracts before any execution fires.",
-    tags: ["Circuit Breaker", "Slippage Guard", "Address Whitelist", "Audit Log"],
+      "Hard gates every intent: size, slippage, daily exposure, leverage, and near-term macro events from SoSoValue — before Broker can fire.",
+    tags: ["Size limits", "Slippage", "Macro hard gate", "Audit"],
   },
 ];
 
@@ -540,21 +545,21 @@ const INTEGRATIONS = [
     name: "SoSoValue Terminal",
     icon: Activity,
     description:
-      "Real-time ETF fund flows, AI-driven news sentiment, crypto market snapshots, and macro economic indicators — the intelligence backbone of every Bloom AI newsletter.",
-    endpoints: ["/etf/flows", "/news/sentiment", "/market/snapshot"],
+      "ETF flows, sentiment, indexes, fundraising, and macro calendar — the data layer behind newsletters, strategies, and Sentinel hard gates.",
+    endpoints: ["/etf/flows", "/news/sentiment", "/macro/calendar"],
   },
   {
-    name: "SSI Protocol",
+    name: "SSI · Strategies",
     icon: Layers,
     description:
-      "EVM-compatible on-chain index creation. Bloom AI mints custom Wrapped Token indices backed by licensed custodians, representing the exact portfolio weightings from the Strategist agent.",
-    endpoints: ["Index Mint", "Rebalance", "TVL Query"],
+      "Pipeline-minted index baskets with review, SoSo compare, Studio edits, and one-click handoff to copy-trade — ledger-backed signal trail.",
+    endpoints: ["Mint SSI", "Compare", "Ledger proof"],
   },
   {
     name: "SoDEX · ValueChain",
     icon: Zap,
     description:
-      "100,000 TPS decentralized on-chain orderbook. Bloom AI executes spot and perpetual orders via EIP-712 typed signatures on Testnet (138565) and Mainnet (286623).",
-    endpoints: ["/trade/orders", "/markets/tickers", "/ws/spot"],
+      "Live testnet orderbook execution (chain 138565): signed batch spot orders, account WS fills, and mark-to-market Performance analytics.",
+    endpoints: ["/trade/orders/batch", "/markets/symbols", "/ws/spot"],
   },
 ];

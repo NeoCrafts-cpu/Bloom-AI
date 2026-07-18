@@ -61,14 +61,130 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
   },
 );
 
+/**
+ * Prepare a spot basket for the connected wallet's own SoDEX account.
+ * Returns EIP-712 ExchangeAction typed data — user signs with MetaMask, then /execute.
+ */
 app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
-  "/api/broker/execute",
+  "/api/broker/prepare",
   async (req, reply) => {
     const intent = req.body;
+    const { runSentinel } = await import("./agents/sentinel/index.js");
+    const { prepareUserSpotBasket } = await import("./agents/broker/prepareBasket.js");
+    const { tradeStore } = await import("./store/tradeStore.js");
+
+    const sentinel = await runSentinel(intent);
+    if (!sentinel.passed) {
+      tradeStore.recordSentinelBlock(sentinel, {
+        strategyId: intent.strategyId,
+        userAddress: intent.userAddress,
+      });
+      wsManager.broadcast({ type: "SENTINEL_TRIP", payload: sentinel, timestamp: new Date().toISOString() });
+      return reply.code(422).send({ data: { sentinelStatus: "blocked", sentinelReport: sentinel } });
+    }
+
+    try {
+      const { session, typedData } = await prepareUserSpotBasket(intent);
+      return {
+        data: {
+          prepareId: session.id,
+          accountID: session.accountID,
+          userAddress: session.userAddress,
+          intentId: session.intentId,
+          preview: session.preview,
+          skipped: session.skipped,
+          expiresAt: session.expiresAt,
+          typedData,
+          sentinelReport: sentinel,
+        },
+      };
+    } catch (err) {
+      tradeStore.recordError(
+        { strategyId: intent.strategyId, userAddress: intent.userAddress },
+        (err as Error).message,
+      );
+      return reply.code(400).send({ error: (err as Error).message });
+    }
+  },
+);
+
+app.post<{
+  Body:
+    | (import("@bloom-ai/types").CopyTradeIntent & {
+        prepareId?: string;
+        sodexSignature?: string;
+      })
+    | {
+        prepareId: string;
+        sodexSignature: string;
+        userAddress: string;
+      };
+}>(
+  "/api/broker/execute",
+  async (req, reply) => {
+    const body = req.body as {
+      prepareId?: string;
+      sodexSignature?: string;
+      userAddress?: string;
+      strategyId?: string;
+      allocationUSD?: number;
+      maxSlippageBps?: number;
+      deadline?: number;
+      userSignature?: string;
+      newsletterId?: string;
+      venue?: "spot" | "perps";
+      leverage?: number;
+      executionStyle?: "market" | "twap";
+      twapDurationSec?: number;
+      signalId?: string;
+    };
+
     const { config } = await import("./config.js");
     const { runSentinel } = await import("./agents/sentinel/index.js");
-    const { executeCopyTrade } = await import("./agents/broker/index.js");
     const { tradeStore } = await import("./store/tradeStore.js");
+
+    // ── Per-wallet path: MetaMask signed the SoDEX batch ────────────────────
+    if (body.prepareId && body.sodexSignature && body.userAddress) {
+      try {
+        const { executePreparedUserTrade } = await import("./agents/broker/executePrepared.js");
+        const { prepareStore } = await import("./store/prepareStore.js");
+        const peek = prepareStore.peek(body.prepareId);
+        if (peek) {
+          const sentinel = await runSentinel(peek.intent);
+          if (!sentinel.passed) {
+            tradeStore.recordSentinelBlock(sentinel, {
+              strategyId: peek.intent.strategyId,
+              userAddress: peek.intent.userAddress,
+            });
+            return reply.code(422).send({ data: { sentinelStatus: "blocked", sentinelReport: sentinel } });
+          }
+        }
+        const result = await executePreparedUserTrade({
+          prepareId: body.prepareId,
+          sodexSignature: body.sodexSignature,
+          userAddress: body.userAddress,
+        });
+        const intent = peek?.intent ?? {
+          strategyId: body.strategyId ?? "",
+          newsletterId: body.newsletterId ?? "",
+          userAddress: body.userAddress,
+          allocationUSD: body.allocationUSD ?? 0,
+          maxSlippageBps: body.maxSlippageBps ?? 50,
+        };
+        tradeStore.recordExecution(intent, result, false);
+        return { data: { ...result, simulated: false, executionMode: "user-wallet" } };
+      } catch (err) {
+        tradeStore.recordError(
+          { strategyId: body.strategyId ?? "", userAddress: body.userAddress },
+          (err as Error).message,
+        );
+        return reply.code(500).send({ error: (err as Error).message });
+      }
+    }
+
+    // ── Legacy / Auto-Copy path: server SODEX_API_PRIVATE_KEY ───────────────
+    const intent = body as import("@bloom-ai/types").CopyTradeIntent;
+    const { executeCopyTrade } = await import("./agents/broker/index.js");
     const { verifyCopyTradeAuth } = await import("./signing/copyTradeAuth.js");
 
     const auth = verifyCopyTradeAuth({
@@ -101,7 +217,7 @@ app.post<{ Body: import("@bloom-ai/types").CopyTradeIntent }>(
       const result = await executeCopyTrade(intent);
       const simulated = !config.SODEX_API_PRIVATE_KEY;
       tradeStore.recordExecution(intent, result, simulated);
-      return { data: { ...result, simulated } };
+      return { data: { ...result, simulated, executionMode: simulated ? "simulated" : "server-key" } };
     } catch (err) {
       tradeStore.recordError(
         { strategyId: intent.strategyId, userAddress: intent.userAddress },

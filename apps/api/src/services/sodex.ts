@@ -174,12 +174,82 @@ async function signedPost<T>(
 
   const json = (await res.json()) as SodexResponse<T>;
   if (json.code !== 0 && json.code !== 200) {
+    const errText = String(json.error ?? "unknown");
+    const hint =
+      /api key not found/i.test(errText)
+        ? ` — signature wallet ${auth.signingAddress.slice(0, 10)}… must own accountID in this request (not a different MetaMask wallet)`
+        : "";
     throw new Error(
-      `SoDEX ${actionType} error ${json.code}: ${json.error}` +
-        ` (auth=${auth.source}, key=${auth.apiKeyName ?? "omit/master"})`,
+      `SoDEX ${actionType} error ${json.code}: ${errText}` +
+        ` (auth=${auth.source}, key=${auth.apiKeyName ?? "omit/master"})` +
+        hint,
     );
   }
   return json.data as T;
+}
+
+/**
+ * Submit a pre-signed SoDEX action (user MetaMask signature).
+ * Master-wallet mode: omit X-API-Key — signer must own the accountID in params.
+ */
+export async function submitUserSignedPost<T>(args: {
+  url: string;
+  actionType: string;
+  params: Record<string, unknown>;
+  typedSig: string;
+  nonce: number;
+  signingAddress: string;
+  apiKeyName?: string | null;
+}): Promise<T> {
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "X-API-Sign": args.typedSig,
+    "X-API-Nonce": String(args.nonce),
+    "X-API-Chain": String(config.SODEX_CHAIN_ID),
+  };
+  if (args.apiKeyName) {
+    headers["X-API-Key"] = args.apiKeyName;
+  }
+
+  const res = await fetch(args.url, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(args.params),
+    signal: AbortSignal.timeout(15000),
+  });
+
+  const json = (await res.json()) as SodexResponse<T>;
+  if (json.code !== 0 && json.code !== 200) {
+    const errText = String(json.error ?? "unknown");
+    const hint =
+      /api key not found/i.test(errText)
+        ? ` — wallet ${args.signingAddress.slice(0, 10)}… must be the SoDEX account owner (master) for accountID in this order`
+        : "";
+    throw new Error(
+      `SoDEX ${args.actionType} error ${json.code}: ${errText}` +
+        ` (auth=user-wallet, key=${args.apiKeyName ?? "omit/master"})` +
+        hint,
+    );
+  }
+  return json.data as T;
+}
+
+export async function submitUserSignedSpotBatch(
+  params: { accountID: number; orders: Record<string, unknown>[] },
+  typedSig: string,
+  nonce: number,
+  signingAddress: string,
+): Promise<{ clOrdID: string; status: string; message?: string; code?: number; orderID?: number }[]> {
+  return submitUserSignedPost({
+    url: `${SPOT}/trade/orders/batch`,
+    actionType: "batchNewOrder",
+    params,
+    typedSig,
+    nonce,
+    signingAddress,
+    apiKeyName: null,
+  });
 }
 
 // ─── Symbol types ─────────────────────────────────────────────────────────────

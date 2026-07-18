@@ -58,14 +58,18 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     throw new Error("Mainnet execution requires explicit user signature");
   }
 
-  // Resolve trading account: prefer connected wallet, then configured SoDEX owner, then signing key.
-  // MetaMask can differ from SODEX_API_PRIVATE_KEY — orders must use the funded SoDEX account.
+  // Live orders are always EIP-712 signed by SODEX_API_PRIVATE_KEY.
+  // accountID MUST belong to that signing wallet — using another MetaMask wallet's
+  // accountID causes SoDEX "API key not found" (signature owner ≠ account owner).
   const { getSigningAddress } = await import("../../services/sodex.js");
-  const candidateAddrs = [
-    intent.userAddress,
-    config.SODEX_API_KEY_ADDRESS,
-    getSigningAddress(),
-  ]
+  const signingAddr = getSigningAddress();
+  const live = !!config.SODEX_API_PRIVATE_KEY && !!signingAddr;
+
+  const candidateAddrs = (
+    live
+      ? [config.SODEX_API_KEY_ADDRESS, signingAddr]
+      : [intent.userAddress, config.SODEX_API_KEY_ADDRESS, signingAddr]
+  )
     .map((a) => a?.trim())
     .filter((a): a is string => !!a && /^0x[0-9a-fA-F]{40}$/.test(a));
 
@@ -85,8 +89,11 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
 
   if (!(accountID > 0)) {
     throw new Error(
-      `SoDEX accountID not found for ${intent.userAddress || "wallet"}. ` +
-        `Connect the wallet that owns the SoDEX testnet account (or set SODEX_API_KEY_ADDRESS), deposit/claim funds, then retry.`,
+      live
+        ? `SoDEX accountID not found for signing wallet ${signingAddr}. ` +
+          `Fund that testnet account (or set SODEX_API_KEY_ADDRESS), then retry.`
+        : `SoDEX accountID not found for ${intent.userAddress || "wallet"}. ` +
+          `Connect a funded SoDEX testnet wallet (or configure SODEX_API_PRIVATE_KEY), then retry.`,
     );
   }
   if (
@@ -95,7 +102,8 @@ export async function executeCopyTrade(intent: CopyTradeIntent): Promise<CopyTra
     intent.userAddress.toLowerCase() !== resolvedAddr.toLowerCase()
   ) {
     console.warn(
-      `[Broker] Wallet ${intent.userAddress} has no SoDEX account — trading account ${resolvedAddr} (#${accountID})`,
+      `[Broker] MetaMask ${intent.userAddress} ≠ execution wallet ${resolvedAddr} (#${accountID}) — ` +
+        `fills use the API-key account (MetaMask only authorizes the intent).`,
     );
   }
 

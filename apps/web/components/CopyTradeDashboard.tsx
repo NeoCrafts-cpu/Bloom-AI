@@ -15,17 +15,6 @@ import { VALUECHAIN_TESTNET, VALUECHAIN_WALLET_PARAMS, SODEX_TESTNET_TRADE_URL, 
 
 type Step = "connect" | "configure" | "signing" | "sentinel" | "executing" | "complete" | "blocked";
 
-// EIP-712 typed data for trade authorization
-const AUTHORIZATION_TYPES = {
-  CopyTradeAuth: [
-    { name: "strategyId",     type: "string"  },
-    { name: "allocationUSD",  type: "uint256" },
-    { name: "maxSlippageBps", type: "uint256" },
-    { name: "userAddress",    type: "address" },
-    { name: "deadline",       type: "uint256" },
-  ],
-} as const;
-
 const API = "";
 
 export default function CopyTradeDashboard() {
@@ -83,21 +72,26 @@ export default function CopyTradeDashboard() {
     router.push(`/copy-trade?${params.toString()}`);
   };
 
-  // If wallet connects externally, advance step + fetch balance
+  // If wallet connects externally, advance step + fetch that wallet's SoDEX balance
   useEffect(() => {
     if (isConnected && step === "connect") {
       setStep("configure");
-      if (address) fetchAccountBalance(address);
     }
     if (!isConnected) {
       setStep("connect");
       setUsdcBalance(null);
     }
-  }, [isConnected, step, address]);
+  }, [isConnected, step]);
+
+  // Each user trades from their own connected SoDEX account balance
+  useEffect(() => {
+    if (isConnected && address) fetchAccountBalance(address);
+  }, [isConnected, address]);
 
   // Fetch real USDC balance from SoDEX account state
   const fetchAccountBalance = async (addr: string) => {
     setBalanceLoading(true);
+    setUsdcBalance(null);
     try {
       const res = await fetch(`${API}/api/market/account/${addr}/state`);
       if (!res.ok) return;
@@ -112,7 +106,7 @@ export default function CopyTradeDashboard() {
     }
   };
 
-  // -- Step: Sign trade authorization with MetaMask ---------------------------
+  // -- Prepare basket → MetaMask signs SoDEX ExchangeAction → submit ----------
   const signAuthorization = async () => {
     if (!address) return;
     if (!strategyId) {
@@ -120,10 +114,15 @@ export default function CopyTradeDashboard() {
       setStep("configure");
       return;
     }
+    if (venue === "perps" || executionStyle === "twap") {
+      setExecError("Per-wallet trading supports Spot + MARKET only. Switch Venue/Execution and retry.");
+      return;
+    }
+
     setIsLoading(true);
+    setExecError(null);
     setStep("signing");
 
-    // Ensure MetaMask is on the right chain before signing
     const TARGET_CHAIN_ID = VALUECHAIN_TESTNET.chainId;
     const TARGET_CHAIN_HEX = VALUECHAIN_TESTNET.chainIdHex;
 
@@ -136,7 +135,6 @@ export default function CopyTradeDashboard() {
 
     const eth = window.ethereum as { request: (args: { method: string; params?: unknown[] }) => Promise<unknown> };
 
-    // Try to switch; if not added, add it
     try {
       await eth.request({ method: "wallet_switchEthereumChain", params: [{ chainId: TARGET_CHAIN_HEX }] });
     } catch (switchErr: unknown) {
@@ -152,14 +150,12 @@ export default function CopyTradeDashboard() {
           return;
         }
       } else {
-        // User rejected switch
         setStep("configure");
         setIsLoading(false);
         return;
       }
     }
 
-    // Verify the active chain is now correct
     const currentChainId = await eth.request({ method: "eth_chainId" }) as string;
     if (parseInt(currentChainId, 16) !== TARGET_CHAIN_ID) {
       alert(`Please switch MetaMask to ValueChain Testnet (Chain ID ${TARGET_CHAIN_ID}) before signing.`);
@@ -168,113 +164,97 @@ export default function CopyTradeDashboard() {
       return;
     }
 
-    const deadline = BigInt(Math.floor(Date.now() / 1000) + 3600); // 1 hour
-
-    try {
-      const sig = await signTypedDataAsync({
-        domain: {
-          name:    "Bloom AI",
-          version: "1",
-          chainId: TARGET_CHAIN_ID,
-        },
-        types: AUTHORIZATION_TYPES,
-        primaryType: "CopyTradeAuth",
-        message: {
-          strategyId,
-          allocationUSD:  BigInt(Math.round(allocation)),
-          maxSlippageBps: BigInt(slippage),
-          userAddress:    address,
-          deadline,
-        },
-      });
-
-      setUserSignature(sig);
-      await runSentinelAndExecute(sig, Number(deadline));
-    } catch (err) {
-      // User rejected signing or chain mismatch
-      const msg = String((err as Error)?.message ?? err);
-      if (msg.includes("ChainMismatch") || msg.includes("chain")) {
-        alert("Chain mismatch detected. Please disconnect your wallet, refresh the page, and reconnect.");
-      }
-      console.error("Signing rejected", err);
-      setStep("configure");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // -- Step: Sentinel + Execute -----------------------------------------------
-  const runSentinelAndExecute = async (sig: string, deadline: number) => {
-    setIsLoading(true);
-    setExecError(null);
-    setStep("sentinel");
-
     const intent: CopyTradeIntent = {
       strategyId,
-      newsletterId:   "nl-latest",
-      userAddress:    address ?? "0x0000000000000000000000000000000000000000",
-      allocationUSD:  allocation,
+      newsletterId: "nl-latest",
+      userAddress: address,
+      allocationUSD: allocation,
       maxSlippageBps: slippage,
-      deadline,
-      userSignature: sig,
-      venue,
-      leverage: venue === "perps" ? leverage : undefined,
-      executionStyle,
-      twapDurationSec: executionStyle === "twap" ? twapDurationSec : undefined,
+      venue: "spot",
+      executionStyle: "market",
     };
 
-    let report: SentinelReport;
     try {
-      const res  = await fetch(`${API}/api/sentinel/check`, {
-        method:  "POST",
+      setStep("sentinel");
+      const prepRes = await fetch(`${API}/api/broker/prepare`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(intent),
+        body: JSON.stringify(intent),
       });
-      if (!res.ok) {
-        throw new Error("Sentinel check failed — API offline");
+      const prepJson = await prepRes.json().catch(() => ({}));
+      if (!prepRes.ok) {
+        if (prepJson?.data?.sentinelStatus === "blocked") {
+          setSentinelReport(prepJson.data.sentinelReport as SentinelReport);
+          setStep("blocked");
+          return;
+        }
+        throw new Error((prepJson as { error?: string }).error ?? "Prepare failed");
       }
-      const json = await res.json();
-      report = json?.data ?? json;
-      if (!report?.checks) {
-        throw new Error("Invalid sentinel response");
-      }
-    } catch (err) {
-      setExecError((err as Error).message);
-      setStep("configure");
-      setIsLoading(false);
-      return;
-    }
 
-    setSentinelReport(report);
+      const prep = prepJson.data as {
+        prepareId: string;
+        sentinelReport: SentinelReport;
+        typedData: {
+          domain: {
+            name: string;
+            version: string;
+            chainId: number;
+            verifyingContract: `0x${string}`;
+          };
+          types: { ExchangeAction: { name: string; type: string }[] };
+          primaryType: "ExchangeAction";
+          message: { payloadHash: `0x${string}`; nonce: number };
+        };
+      };
 
-    if (!report.passed) {
-      setStep("blocked");
-      setIsLoading(false);
-      return;
-    }
+      setSentinelReport(prep.sentinelReport);
+      setStep("signing");
 
-    setStep("executing");
-    try {
-      const res = await fetch(`${API}/api/broker/execute`, {
-        method:  "POST",
+      // User signs the real SoDEX batch — fills debit THIS wallet's USDC
+      const sodexSignature = await signTypedDataAsync({
+        domain: prep.typedData.domain,
+        types: prep.typedData.types,
+        primaryType: "ExchangeAction",
+        message: {
+          payloadHash: prep.typedData.message.payloadHash,
+          nonce: BigInt(prep.typedData.message.nonce),
+        },
+      });
+
+      setUserSignature(sodexSignature);
+      setStep("executing");
+
+      const execRes = await fetch(`${API}/api/broker/execute`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify(intent),
+        body: JSON.stringify({
+          prepareId: prep.prepareId,
+          sodexSignature,
+          userAddress: address,
+          strategyId,
+          allocationUSD: allocation,
+          maxSlippageBps: slippage,
+          newsletterId: "nl-latest",
+        }),
       });
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => ({}));
-        throw new Error((errJson as { error?: string }).error ?? "Execution failed — broker offline");
+      const execJson = await execRes.json().catch(() => ({}));
+      if (!execRes.ok) {
+        throw new Error((execJson as { error?: string }).error ?? "Execution failed");
       }
-      const json = await res.json();
-      const result = (json?.data ?? json) as CopyTradeResult & { simulated?: boolean };
-      if (!result?.orders) {
-        throw new Error("Invalid execution response");
-      }
+      const result = (execJson?.data ?? execJson) as CopyTradeResult;
+      if (!result?.orders) throw new Error("Invalid execution response");
       setTradeResult(result);
       const firstOrderId = result.orders[0]?.orderId;
       setTxHash(isOnChainTxHash(firstOrderId) ? firstOrderId! : "");
       setStep("complete");
+      fetchAccountBalance(address);
     } catch (err) {
-      setExecError((err as Error).message);
+      const msg = String((err as Error)?.message ?? err);
+      if (msg.includes("ChainMismatch") || msg.includes("chain")) {
+        alert("Chain mismatch detected. Please disconnect your wallet, refresh the page, and reconnect.");
+      }
+      console.error("User-wallet trade failed", err);
+      setExecError(msg);
       setStep("configure");
     } finally {
       setIsLoading(false);
@@ -498,9 +478,19 @@ export default function CopyTradeDashboard() {
                 )}
               </div>
 
-              {/* USDC Balance from SoDEX */}
+              <div className="text-xs text-emerald-300/90 bg-emerald-950/30 border border-emerald-800/40 rounded-lg px-3 py-2 leading-relaxed">
+                Fills spend USDC from <span className="font-semibold">your connected SoDEX account</span>
+                {address ? (
+                  <> (<span className="font-mono">{address.slice(0, 6)}…{address.slice(-4)}</span>)</>
+                ) : null}
+                . MetaMask signs the SoDEX order batch directly.
+              </div>
+
+              {/* USDC Balance from connected wallet's SoDEX account */}
               <div className="flex items-center justify-between text-xs">
-                <span className="text-bloom-text-muted font-semibold uppercase tracking-wider">SoDEX USDC Balance</span>
+                <span className="text-bloom-text-muted font-semibold uppercase tracking-wider">
+                  Your SoDEX USDC Balance
+                </span>
                 {balanceLoading ? (
                   <span className="text-bloom-text-muted animate-pulse">Loading...</span>
                 ) : usdcBalance !== null ? (
@@ -509,7 +499,7 @@ export default function CopyTradeDashboard() {
                     {usdcBalance < allocation && " (insufficient)"}
                   </span>
                 ) : (
-                  <span className="text-bloom-text-muted">No SoDEX account yet</span>
+                  <span className="text-bloom-text-muted">No SoDEX account yet — claim/deposit on SoDEX testnet</span>
                 )}
               </div>
               <div>
@@ -620,7 +610,7 @@ export default function CopyTradeDashboard() {
               </div>
               {usdcBalance !== null && usdcBalance < allocation && (
                 <div className="text-xs text-red-400 bg-red-900/20 border border-red-800/30 rounded-lg px-3 py-2">
-                  Insufficient USDC balance. Reduce allocation or deposit USDC to SoDEX.
+                  Insufficient USDC in your SoDEX account. Reduce allocation or deposit USDC on SoDEX testnet.
                 </div>
               )}
               {execError && (
@@ -632,7 +622,7 @@ export default function CopyTradeDashboard() {
                 disabled={isLoading || !strategyId || (usdcBalance !== null && usdcBalance < allocation)}
                 className="orange-btn flex items-center gap-2 text-sm disabled:opacity-50">
                 <Shield size={14} />
-                Sign & Execute via MetaMask
+                Sign SoDEX Order with MetaMask
               </button>
             </div>
           )}
@@ -645,7 +635,7 @@ export default function CopyTradeDashboard() {
 
         {/* Step 4 — Signing */}
         {["signing", "sentinel", "executing", "complete"].includes(step) && (
-          <StepCard step={4} title="EIP-712 Wallet Signature" icon={Shield}
+          <StepCard step={4} title="SoDEX Order Signature" icon={Shield}
             active={step === "signing"}
             completed={["sentinel", "executing", "complete"].includes(step)}>
             {userSignature ? (
